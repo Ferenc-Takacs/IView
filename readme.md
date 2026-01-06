@@ -46,6 +46,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
     *   **Adjustments:** Fine-tune Gamma, Contrast, and Brightness.
     *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
+![IView preview](screenshots/preview_invert.jpg)
 *   **⚙️ Advanced Features:**
     *   Display detailed image metadata and technical information.
     *   **Geolocation:** View stored location data directly in Google Maps.
