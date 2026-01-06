@@ -31,6 +31,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 **IView** is a versatile image viewer application designed to provide efficient image management and basic editing tools, leveraging the performance and safety of the Rust ecosystem.
 
+![IView képernyőkép](screenshots/preview.png)
+
 ### Key Features:
 *   **📂 Image Browsing:** View images within a specific directory with forward/backward navigation and various sorting options.
 *   **📋 Clipboard Integration:**
