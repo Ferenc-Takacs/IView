@@ -1,0 +1,22 @@
+[package]
+name = "iview"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bmp = "0.5.0"
+image = { version = "0.25", features = ["jpeg", "png", "webp", "tiff"] }
+kamadak-exif = "0.5"
+rfd = "0.15"
+eframe = "0.30" # 2025-ös stabil verzió
+arboard = "3.4"
+winres = "0.1"
+webp = "0.3"
+webbrowser = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+directories = "6.0" # 2026-os stabil verzió
+time-format = "1.2.1"
+
+[build-dependencies]
+winres = "0.1"
