@@ -53,8 +53,10 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 ### 🛠 Tech Stack / Technológiai háttér
 
-*   **Language:** [Rust](www.rust-lang.org)
+*   **Language:** [Rust](/www.rust-lang.org)
 *   **UI Framework:** [eframe](github.com) / [egui](github.com)
+
+*   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
 ### 🚀 Development / Fejlesztés
 
