@@ -61,3 +61,4 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 # Projekt fordítása és futtatása
 cargo run --release
 ```
+![IView képernyőkép](screenshots/preview.jpg)
