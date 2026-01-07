@@ -686,9 +686,20 @@ impl eframe::App for ImageViewer {
             return;
        }
 
-
+        
         // Gyorsbillentyűk figyelése
-        if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::R))) { // red channel
+        if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT | egui::Modifiers::SHIFT, egui::Key::C))) { // copy view
+            // not work with Ctrl
+             println!("copy view");
+           self.save_original = false;
+            self.copy_to_clipboard();
+        }        
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::SHIFT, egui::Key::S))) { // save view
+            println!("save view");
+            self.save_original = false;
+            self.starting_save();
+        }
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::R))) { // red channel
             self.color_settings.show_r = !self.color_settings.show_r;
             self.review(ctx, true, false);
         }
@@ -723,15 +734,12 @@ impl eframe::App for ImageViewer {
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::C))) { // copy
             // not work with Ctrl, or Shift
+            println!("copy");
             self.save_original = true;
             self.copy_to_clipboard();
         }        
-        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT | egui::Modifiers::SHIFT, egui::Key::C))) { // copy view
-            // not work with Ctrl, or Shift
-            self.save_original = false;
-            self.copy_to_clipboard();
-        }        
-        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::V))) { // not work with Ctrl, or Shift
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::V))) { // paste
+            // not work with Ctrl
             self.copy_from_clipboard(ctx);
         }        
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::C))) { // Színkorrekció
@@ -744,11 +752,8 @@ impl eframe::App for ImageViewer {
             self.load_image(ctx, true);
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::S))) { // save
+            println!("save");
             self.save_original = true;
-            self.starting_save();
-        }
-        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::SHIFT, egui::Key::S))) { // save view
-            self.save_original = false;
             self.starting_save();
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::N))) { // next
