@@ -1,10 +1,7 @@
 ﻿/*
 Created by Ferenc Takács in 2026
 TODO
-1. png háttér variácoók, és léptetésük
-2. gif, és webp animációk megjelenítése
-3. a látható változtatásokkal mentés, másolás a vágólapra.
-4. resize beépítése a magnify-be, a 0.5 nagyítással mentés fele akkora méreteket jelentsen a mentésnél.
+ gif, és webp animációk megjelenítése
 */
 use arboard::Clipboard;
 use eframe::egui;
@@ -216,6 +213,29 @@ impl Rotate {
     }
 }
 
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
+enum BackgroundStyle {
+    Black,
+    Gray,
+    White,
+    Green,
+    Checkerboard,
+    CheckerboardColor,
+}
+
+impl BackgroundStyle {
+    fn inc(self) -> BackgroundStyle{
+        return match self {
+            BackgroundStyle::Black => BackgroundStyle::Gray,
+            BackgroundStyle::Gray => BackgroundStyle::White,
+            BackgroundStyle::White => BackgroundStyle::Green,
+            BackgroundStyle::Green => BackgroundStyle::Checkerboard,
+            BackgroundStyle::Checkerboard => BackgroundStyle::CheckerboardColor,
+            BackgroundStyle::CheckerboardColor => BackgroundStyle::Black,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
 enum SortDir {
     Name,
@@ -308,6 +328,7 @@ struct ImageViewer {
     fit_open: bool,
     exif: Option<exif::Exif>,
     save_original: bool,
+    bg_style: BackgroundStyle,
 }
 
 
@@ -341,6 +362,7 @@ impl Default for ImageViewer {
             fit_open: true,
             exif: None,
             save_original: false, //always set before use
+            bg_style: BackgroundStyle::Checkerboard,
         }
     }
 }
@@ -758,6 +780,9 @@ impl eframe::App for ImageViewer {
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::N))) { // next
             self.navigation(ctx, 1);
         }
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::D))) { // bacground rotate
+            self.bg_style = self.bg_style.clone().inc();
+        }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::B))) { // before
             self.navigation(ctx, -1);
         }
@@ -984,7 +1009,27 @@ impl eframe::App for ImageViewer {
                         self.show_info = true;
                         ui.close_menu();
                     }
-                    
+                    ui.menu_button("Background \tD", |ui| {
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::Black, "Black").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::Gray, "Gray").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::White, "White").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::Green, "Green").clicked() {
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::Checkerboard, "Checkerboard").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardColor, "CheckerboardColor").clicked() {
+                            ui.close_menu();
+                        }
+                    });
                 });
 
                 let prev_button = egui::Button::new("<<")
@@ -1046,25 +1091,63 @@ impl eframe::App for ImageViewer {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(tex) = &self.textura {
-                let mut fill_color = egui::Color32::from_gray(0);
-                if self.image_format == SaveFormat::Png {
-                    ctx.request_repaint();
-                    let time = ctx.input(|i| i.time); // Másodpercekben mért idő a program indulása óta
-                    let mut phase = time * 4.0;
-                    let mut pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
-                    let red = (10.0 + pulse * 30.0) as u8;
-                    phase += 3.1415926/1.5;
-                    pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
-                    let green = (10.0 + pulse * 30.0) as u8;
-                    phase += 3.1415926/1.5;
-                    pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
-                    let blue = (10.0 + pulse * 30.0) as u8;
-                    fill_color = egui::Color32::from_rgb(red,green,blue);
-                }
+                let fill_color = egui::Color32::from_gray(0);
                 
                 egui::Frame::canvas(ui.style())
-                    .fill(fill_color) // Sötétszürke vagy BLACK
+                    .fill(fill_color)
                     .show(ui, |ui| {
+                        if self.image_format == SaveFormat::Png || self.image_format == SaveFormat::Webp {
+                            let rect = ui.max_rect(); // A terület, ahová a kép kerülne
+                            let paint = ui.painter();
+                            match self.bg_style {
+                                BackgroundStyle::Black => {paint.rect_filled(rect, 0.0, egui::Color32::BLACK);},
+                                BackgroundStyle::White => {paint.rect_filled(rect, 0.0, egui::Color32::WHITE);},
+                                BackgroundStyle::Gray => {paint.rect_filled(rect, 0.0, egui::Color32::from_gray(128));},
+                                BackgroundStyle::Green => {paint.rect_filled(rect, 0.0, egui::Color32::from_rgb(50,200,50));},
+                                BackgroundStyle::Checkerboard => {
+                                    paint.rect_filled(rect, 0.0, egui::Color32::from_gray(40));
+                                    let tile_size = 16.0; // A négyzetek mérete pixelben
+                                    let color_light = egui::Color32::from_gray(60);                                    
+                                    for y in 0..(rect.height() / tile_size) as i32 {
+                                        for x in 0..(rect.width() / tile_size) as i32 {
+                                            if (x + y) % 2 == 0 {
+                                                let tile_rect = egui::Rect::from_min_size(
+                                                    egui::pos2(
+                                                        rect.left() + x as f32 * tile_size,
+                                                        rect.top() + y as f32 * tile_size,
+                                                    ),
+                                                    egui::vec2(tile_size, tile_size),
+                                                );
+                                                if rect.contains_rect(tile_rect) {
+                                                    paint.rect_filled(tile_rect, 0.0, color_light);
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                BackgroundStyle::CheckerboardColor => {
+                                    paint.rect_filled(rect, 0.0, egui::Color32::from_rgb(50,200,50));
+                                    let tile_size = 16.0; // A négyzetek mérete pixelben
+                                    let color_light = egui::Color32::from_rgb(180,50,180);                                    
+                                    for y in 0..(rect.height() / tile_size) as i32 {
+                                        for x in 0..(rect.width() / tile_size) as i32 {
+                                            if (x + y) % 2 == 0 {
+                                                let tile_rect = egui::Rect::from_min_size(
+                                                    egui::pos2(
+                                                        rect.left() + x as f32 * tile_size,
+                                                        rect.top() + y as f32 * tile_size,
+                                                    ),
+                                                    egui::vec2(tile_size, tile_size),
+                                                );
+                                                if rect.contains_rect(tile_rect) {
+                                                    paint.rect_filled(tile_rect, 0.0, color_light);
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                        }
                         
                         let new_size = self.image_size * self.magnify;
                         let scroll_id = ui.make_persistent_id("kep_scroll");
