@@ -26,7 +26,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Részletes képinformációk és metaadatok megjelenítése.
     *   **Geolokáció:** Tárolt GPS koordináták megnyitása közvetlenül a Google Maps alkalmazásban.
     *   **GPU Optimalizálás:** A túl nagy panorámaképek automatikus átméretezése a grafikus processzorok (GPU) által megkövetelt maximum 16384 x 16384 képpontos méretre.
-
+    *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
+    *   **Prémium átméretezés:** Mentésnél és másolásnál az alkalmazás Lanczos3 mintavételezést használ, ami tűéles minőséget biztosít kicsinyítés esetén is.
 ---
 
 ## 🇺🇸 English Description
@@ -51,6 +52,11 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Display detailed image metadata and technical information.
     *   **Geolocation:** View stored location data directly in Google Maps.
     *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
+    *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
+    *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
+### ✨ Export & Workflow
+- **Save View / Copy View**: Don't just view – export! Any adjustments you make (Gamma, Rotation, Zoom) are baked into the output.
+- **Smart Resizing**: If you are zoomed out to 0.5x, "Save View" will export a half-sized image using high-quality Lanczos3 filtering.
 
 ---
 

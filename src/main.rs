@@ -1,4 +1,12 @@
-﻿use arboard::Clipboard;
+﻿/*
+Created by Ferenc Takács in 2026
+TODO
+1. png háttér variácoók, és léptetésük
+2. gif, és webp animációk megjelenítése
+3. a látható változtatásokkal mentés, másolás a vágólapra.
+4. resize beépítése a magnify-be, a 0.5 nagyítással mentés fele akkora méreteket jelentsen a mentésnél.
+*/
+use arboard::Clipboard;
 use eframe::egui;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -220,6 +228,10 @@ enum SortDir {
 enum SaveFormat {
     Jpeg,
     Webp,
+    Gif,
+    Png,
+    Bmp,
+    Tif,
 }
 
 struct SaveSettings {
@@ -272,6 +284,7 @@ struct ImageViewer {
     image_full_path: Option<PathBuf>, // a kép neve a teljes utvonallal
     file_meta: Option<fs::Metadata>,
     image_name: String, // kép neve a könyvtár nélkül
+    image_format: SaveFormat,
     image_folder: Option<PathBuf>, // a képek könyvtára
     list_of_images: Vec<fs::DirEntry>, // kép nevek listája a könyvtárban
     actual_index: usize, // a kép indexe a listában
@@ -294,6 +307,7 @@ struct ImageViewer {
     refit_reopen: bool,
     fit_open: bool,
     exif: Option<exif::Exif>,
+    save_original: bool,
 }
 
 
@@ -303,6 +317,7 @@ impl Default for ImageViewer {
             image_full_path: None,
             file_meta: None,
             image_name: "".to_string(),
+            image_format: SaveFormat::Bmp,
             image_folder: None,
             list_of_images: Vec::new(),
             actual_index: 0,
@@ -325,6 +340,7 @@ impl Default for ImageViewer {
             refit_reopen: false,
             fit_open: true,
             exif: None,
+            save_original: false, //always set before use
         }
     }
 }
@@ -358,18 +374,19 @@ impl ImageViewer {
     }
 
     fn copy_to_clipboard(&self) {
-        if let Some(full_path) = &self.image_full_path {
-            if let Ok(img) = image::open(full_path) {
-                let rgba = img.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                let image_data = arboard::ImageData {
-                    width: w as usize,
-                    height: h as usize,
-                    bytes: std::borrow::Cow::from(rgba.into_raw()),
-                };
-                if let Ok(mut cb) = arboard::Clipboard::new() {
-                    let _ = cb.set_image(image_data);
-                }
+        if let Some(mut img) = self.original_image.clone() {
+            if !self.save_original {
+                self.image_modifies(&mut img);
+            }
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let image_data = arboard::ImageData {
+                width: w as usize,
+                height: h as usize,
+                bytes: std::borrow::Cow::from(rgba.into_raw()),
+            };
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                let _ = cb.set_image(image_data);
             }
         }
     }
@@ -464,11 +481,37 @@ impl ImageViewer {
         }
     }
 
+    fn image_modifies(&self, img: &mut image::DynamicImage) {
+        let new_width = (img.width() as f32 * self.magnify).round() as u32;
+        let new_height = (img.height() as f32 * self.magnify).round() as u32;
+        let mut processed_img = if (self.magnify - 1.0).abs() > 0.001 {
+            img.resize(
+                new_width,
+                new_height,
+                image::imageops::FilterType::Lanczos3
+            )
+        } else {
+            img.clone()
+        };
+        match self.color_settings.rotate {
+            Rotate::Rotate90 => processed_img = processed_img.rotate90(),
+            Rotate::Rotate180 => processed_img = processed_img.rotate180(),
+            Rotate::Rotate270 => processed_img = processed_img.rotate270(),
+            _ => {}
+        }
+        let mut rgba_image = processed_img.to_rgba8();
+        if let Some(lut) = &self.lut {
+            apply_lut(&mut rgba_image, &lut.lut);
+        }
+        *img = image::DynamicImage::ImageRgba8(rgba_image);
+    }
 
     fn completing_save(&mut self) {
         if let Some(save_data) = &self.save_dialog {
-            if let Ok(img) = image::open(self.image_full_path.as_ref().unwrap()) {
-
+            if let Some(mut img) = self.original_image.clone() {
+                if !self.save_original {
+                    self.image_modifies(&mut img);
+                }
                 match save_data.saveformat {
                     SaveFormat::Jpeg => {
                         let file = std::fs::File::create(&save_data.full_path).unwrap();
@@ -487,6 +530,7 @@ impl ImageViewer {
                             println!("Hiba a WebP mentésekor: {}", e);
                         }
                     }
+                    _ => {}
                 }
             }
         }
@@ -505,6 +549,17 @@ impl ImageViewer {
             .pick_file() 
         {
             self.image_full_path = Some(path.clone());
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+            let image_format = match ext.as_str() {
+                "jpg" => SaveFormat::Jpeg,
+                "jpeg" => SaveFormat::Jpeg,
+                "webp" => SaveFormat::Webp,
+                "png" => SaveFormat::Png,
+                "tif" => SaveFormat::Tif,
+                "gif" => SaveFormat::Gif,
+                _ => SaveFormat::Bmp,
+            };
+            self.image_format = image_format;
             self.make_image_list();
             self.load_image(ctx, false);
         }
@@ -666,7 +721,14 @@ impl eframe::App for ImageViewer {
             self.color_settings.rotate = Rotate::Rotate0;
             self.review(ctx, true, r);
         }
-        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::C))) { // not work with Ctrl, or Shift
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::C))) { // copy
+            // not work with Ctrl, or Shift
+            self.save_original = true;
+            self.copy_to_clipboard();
+        }        
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT | egui::Modifiers::SHIFT, egui::Key::C))) { // copy view
+            // not work with Ctrl, or Shift
+            self.save_original = false;
             self.copy_to_clipboard();
         }        
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::V))) { // not work with Ctrl, or Shift
@@ -682,6 +744,11 @@ impl eframe::App for ImageViewer {
             self.load_image(ctx, true);
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::S))) { // save
+            self.save_original = true;
+            self.starting_save();
+        }
+        else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::SHIFT, egui::Key::S))) { // save view
+            self.save_original = false;
             self.starting_save();
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::N))) { // next
@@ -758,6 +825,15 @@ impl eframe::App for ImageViewer {
                     let save_button = egui::Button::new("Save as ...")
                         .shortcut_text(ctx.format_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE,  egui::Key::S)));
                     if ui.add(save_button).clicked() {
+                        self.save_original = true;
+                        self.starting_save();
+                        ui.close_menu();
+                    }
+
+                    let save_button = egui::Button::new("Save view as ...")
+                        .shortcut_text(ctx.format_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::SHIFT,  egui::Key::S)));
+                    if ui.add(save_button).clicked() {
+                        self.save_original = false;
                         self.starting_save();
                         ui.close_menu();
                     }
@@ -765,6 +841,15 @@ impl eframe::App for ImageViewer {
                     let copy_button = egui::Button::new("Copy")
                         .shortcut_text(ctx.format_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::C)));
                     if ui.add(copy_button).clicked() {
+                        self.save_original = true;
+                        self.copy_to_clipboard();
+                        ui.close_menu();
+                    }
+
+                    let copy_button = egui::Button::new("Copy view")
+                        .shortcut_text(ctx.format_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT | egui::Modifiers::SHIFT, egui::Key::C)));
+                    if ui.add(copy_button).clicked() {
+                        self.save_original = false;
                         self.copy_to_clipboard();
                         ui.close_menu();
                     }
@@ -957,61 +1042,76 @@ impl eframe::App for ImageViewer {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(tex) = &self.textura {
+                let mut fill_color = egui::Color32::from_gray(0);
+                if self.image_format == SaveFormat::Png {
+                    ctx.request_repaint();
+                    let time = ctx.input(|i| i.time); // Másodpercekben mért idő a program indulása óta
+                    let mut phase = time * 4.0;
+                    let mut pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
+                    let red = (10.0 + pulse * 30.0) as u8;
+                    phase += 3.1415926/1.5;
+                    pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
+                    let green = (10.0 + pulse * 30.0) as u8;
+                    phase += 3.1415926/1.5;
+                    pulse = phase.sin() * 0.5 + 0.5; // 0.0 és 1.0 közötti érték
+                    let blue = (10.0 + pulse * 30.0) as u8;
+                    fill_color = egui::Color32::from_rgb(red,green,blue);
+                }
+                
+                egui::Frame::canvas(ui.style())
+                    .fill(fill_color) // Sötétszürke vagy BLACK
+                    .show(ui, |ui| {
                         
-                let new_size = self.image_size * self.magnify;
-                let scroll_id = ui.make_persistent_id("kep_scroll");
-                let mut off = egui::Vec2{ x:0.0, y:0.0 };
+                        let new_size = self.image_size * self.magnify;
+                        let scroll_id = ui.make_persistent_id("kep_scroll");
+                        let mut off = egui::Vec2{ x:0.0, y:0.0 };
 
-                if zoom != 1.0 || self.first_appear > 0 {
+                        if zoom != 1.0 || self.first_appear > 0 {
 
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Title(
-                            format!("IView - {}. {}  {}",
-                            self.actual_index, self.image_name, self.magnify)));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                                    format!("IView - {}. {}  {}",
+                                    self.actual_index, self.image_name, self.magnify)));
+                                    
+                            let ui_rect = ui.max_rect();
+                            let inside = ui_rect.max - ui_rect.min;
+
+                            let mut pointer = if mouse_zoom { // mouse position
+                                    if let Some(p) = ctx.pointer_latest_pos() { p - ui_rect.min }
+                                    else { inside/2.0 }
+                                }
+                                else { inside/2.0 }; // image center
+                            pointer.x = pointer.x.clamp(0.0,old_size.x);
+                            pointer.y = pointer.y.clamp(0.0,old_size.y);
+
+                            let current_offset = self.aktualis_offset;
+                            let mut offset = current_offset;
+                            offset += pointer;
+                            offset *= zoom;
+                            offset -= pointer;
                             
-                    let ui_rect = ui.max_rect();
-                    let inside = ui_rect.max - ui_rect.min;
+                            if new_size.x > self.display_size_netto.x { // need horizontal scrollbar
+                                off.x = offset.x;
+                            }
+                            if new_size.y > self.display_size_netto.y { // need vertical scrollbar
+                                off.y = offset.y;
+                            }
 
-                    let mut pointer = if mouse_zoom { // mouse position
-                            if let Some(p) = ctx.pointer_latest_pos() { p - ui_rect.min }
-                            else { inside/2.0 }
+                            //println!("{:?} {:?} {:?} {:?} {:?} {:?} {:?} {} {:?}",
+                            //    pointer, current_offset, off, ui_rect, inside, old_size, new_size, self.magnify, self.display_size_netto);
                         }
-                        else { inside/2.0 }; // image center
-                    pointer.x = pointer.x.clamp(0.0,old_size.x);
-                    pointer.y = pointer.y.clamp(0.0,old_size.y);
+                        let mut scroll_area = egui::ScrollArea::both()
+                            .id_salt(scroll_id)
+                            .auto_shrink([false; 2]);
 
-                    let current_offset = self.aktualis_offset;
-                    let mut offset = current_offset;
-                    offset += pointer;
-                    offset *= zoom;
-                    offset -= pointer;
-                    
-                    if new_size.x > self.display_size_netto.x { // need horizontal scrollbar
-                        off.x = offset.x;
-                    }
-                    if new_size.y > self.display_size_netto.y { // need vertical scrollbar
-                        off.y = offset.y;
-                    }
+                        if zoom != 1.0 {
+                            scroll_area = scroll_area.vertical_scroll_offset(off.y).horizontal_scroll_offset(off.x);
+                        }
 
-                    //println!("{:?} {:?} {:?} {:?} {:?} {:?} {:?} {} {:?}",
-                    //    pointer, current_offset, off, ui_rect, inside, old_size, new_size, self.magnify, self.display_size_netto);
-                }
-                let mut scroll_area = egui::ScrollArea::both()
-                    .id_salt(scroll_id)
-                    .auto_shrink([false; 2]);
-
-                if zoom != 1.0 {
-                    scroll_area = scroll_area.vertical_scroll_offset(off.y).horizontal_scroll_offset(off.x);
-                }
-
-                let output = scroll_area.show(ui, |ui2| {
-                    ui2.add(egui::Image::from_texture(tex).fit_to_exact_size(new_size));
+                        let output = scroll_area.show(ui, |ui2| {
+                            ui2.add(egui::Image::from_texture(tex).fit_to_exact_size(new_size));
+                        });
+                        self.aktualis_offset = output.state.offset;
                 });
-                self.aktualis_offset = output.state.offset;
-
-            //else {
-            //  ui.centered_and_justified(|ui2| {
-            //      ui2.label("Válassz egy képet a Fájl menüben!");
-            //  });
             }
             self.first_appear = 0;
         });
@@ -1037,7 +1137,7 @@ impl eframe::App for ImageViewer {
                                 ui.add(egui::Slider::new(&mut save_data.quality, 1..=100).text("Quality (WebP)"));
                             }
                         }
-                        //_ => { ui.label("Nincs elérhető extra beállítás ehhez a típushoz. De ezt nem láthatod."); }
+                        _ => { }
                     }
 
                     ui.horizontal(|ui| {
