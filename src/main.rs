@@ -1,8 +1,16 @@
 ﻿/*
+iview/src/main.rs
+
 Created by Ferenc Takács in 2026
+
 TODO
  gif, és webp animációk megjelenítése
+ 
 */
+
+// disable terminal window beyond graphic window in release version
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use arboard::Clipboard;
 use eframe::egui;
 use std::fs;
@@ -13,7 +21,7 @@ use webp::Encoder;
 use exif::{In, Tag};
 use serde::{Serialize, Deserialize};
 use directories::ProjectDirs;
-
+ 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = env::args().collect();
     let start_image = if args.len() > 1 {
@@ -46,6 +54,7 @@ fn main() -> eframe::Result<()> {
             app.refit_reopen    = saved.refit_reopen;
             app.center          = saved.center;
             app.fit_open        = saved.fit_open;
+            app.bg_style        = saved.bg_style;
 
             if let Some(path) = start_image {
                 // Betöltjük az indítási képet
@@ -220,7 +229,8 @@ enum BackgroundStyle {
     White,
     Green,
     Checkerboard,
-    CheckerboardColor,
+    CheckerboardGM,
+    CheckerboardBB,
 }
 
 impl BackgroundStyle {
@@ -230,8 +240,9 @@ impl BackgroundStyle {
             BackgroundStyle::Gray => BackgroundStyle::White,
             BackgroundStyle::White => BackgroundStyle::Green,
             BackgroundStyle::Green => BackgroundStyle::Checkerboard,
-            BackgroundStyle::Checkerboard => BackgroundStyle::CheckerboardColor,
-            BackgroundStyle::CheckerboardColor => BackgroundStyle::Black,
+            BackgroundStyle::Checkerboard => BackgroundStyle::CheckerboardGM,
+            BackgroundStyle::CheckerboardGM => BackgroundStyle::CheckerboardBB,
+            BackgroundStyle::CheckerboardBB => BackgroundStyle::Black,
         }
     }
 }
@@ -244,7 +255,7 @@ enum SortDir {
     Size,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum SaveFormat {
     Jpeg,
     Webp,
@@ -270,6 +281,7 @@ struct AppSettings {
     refit_reopen: bool,
     center: bool,
     fit_open: bool,
+    bg_style: BackgroundStyle,
 }
 
 impl Default for AppSettings {
@@ -282,6 +294,7 @@ impl Default for AppSettings {
             refit_reopen: false,
             center: true,
             fit_open: true,
+            bg_style: BackgroundStyle::Checkerboard,
         }
     }
 }
@@ -374,11 +387,12 @@ impl ImageViewer {
         let settings = AppSettings {
             color_settings: self.color_settings,
             sort_dir:       self.sort,
-            last_folder:   self.image_folder.clone(),
-            magnify:       self.magnify,
-            refit_reopen:  self.refit_reopen,
+            last_folder:    self.image_folder.clone(),
+            magnify:        self.magnify,
+            refit_reopen:   self.refit_reopen,
             center:         self.center,
             fit_open:       self.fit_open,
+            bg_style:       self.bg_style.clone(),
         };
         if let Ok(json) = serde_json::to_string_pretty(&settings) {
             let _ = std::fs::write(&path, json);
@@ -419,6 +433,31 @@ impl ImageViewer {
             self.image_full_path = Some(temp_path); // nem állunk rá a tmp könyvtárra
             self.load_image(ctx, false);
         }
+    }
+
+    fn image_modifies(&self, img: &mut image::DynamicImage) {
+        let new_width = (img.width() as f32 * self.magnify).round() as u32;
+        let new_height = (img.height() as f32 * self.magnify).round() as u32;
+        let mut processed_img = if (self.magnify - 1.0).abs() > 0.001 {
+            img.resize(
+                new_width,
+                new_height,
+                image::imageops::FilterType::Lanczos3
+            )
+        } else {
+            img.clone()
+        };
+        match self.color_settings.rotate {
+            Rotate::Rotate90 => processed_img = processed_img.rotate90(),
+            Rotate::Rotate180 => processed_img = processed_img.rotate180(),
+            Rotate::Rotate270 => processed_img = processed_img.rotate270(),
+            _ => {}
+        }
+        let mut rgba_image = processed_img.to_rgba8();
+        if let Some(lut) = &self.lut {
+            apply_lut(&mut rgba_image, &lut.lut);
+        }
+        *img = image::DynamicImage::ImageRgba8(rgba_image);
     }
 
     fn make_image_list(&mut self) {
@@ -476,6 +515,12 @@ impl ImageViewer {
 
     fn starting_save(&mut self) {
         if let Some(_original_path) = &self.image_full_path {
+            let default_save_name = std::path::Path::new(&self.image_name)
+                .with_extension("png") // Ez lecseréli a .jpg-t .png-re
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("image.png")
+                .to_string();
             let dialog = rfd::FileDialog::new()
                 .set_title("Save image as ...")
                 .add_filter("Png", &["png"])
@@ -484,14 +529,18 @@ impl ImageViewer {
                 .add_filter("Gif", &["gif"])
                 .add_filter("Webp", &["webp"])
                 .add_filter("Windows bitmap", &["bmp"])
-                .set_file_name(self.image_name.as_str()); // Alapértelmezett név
+                .set_file_name(&default_save_name); // Alapértelmezett név
 
             if let Some(ut) = dialog.save_file() {
                 let ext = ut.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
                 let saveformat = match ext.as_str() {
                     "jpg" => SaveFormat::Jpeg,
                     "webp" => SaveFormat::Webp,
-                    _ => { self.completing_save(); return; }
+                    "png" => SaveFormat::Png,
+                    "tif" => SaveFormat::Tif,
+                    "gif" => SaveFormat::Gif,
+                    "bmp" => SaveFormat::Bmp,
+                    &_ => { return; },
                 };
                 self.save_dialog = Some(SaveSettings {
                     full_path: ut,
@@ -499,33 +548,12 @@ impl ImageViewer {
                     quality: 85, // Alapértelmezett JPEG minőség
                     lossless: false,
                 });
+                if saveformat != SaveFormat::Jpeg && saveformat != SaveFormat::Webp {
+                   self.completing_save();
+                   self.save_dialog = None;
+                 }
             }
         }
-    }
-
-    fn image_modifies(&self, img: &mut image::DynamicImage) {
-        let new_width = (img.width() as f32 * self.magnify).round() as u32;
-        let new_height = (img.height() as f32 * self.magnify).round() as u32;
-        let mut processed_img = if (self.magnify - 1.0).abs() > 0.001 {
-            img.resize(
-                new_width,
-                new_height,
-                image::imageops::FilterType::Lanczos3
-            )
-        } else {
-            img.clone()
-        };
-        match self.color_settings.rotate {
-            Rotate::Rotate90 => processed_img = processed_img.rotate90(),
-            Rotate::Rotate180 => processed_img = processed_img.rotate180(),
-            Rotate::Rotate270 => processed_img = processed_img.rotate270(),
-            _ => {}
-        }
-        let mut rgba_image = processed_img.to_rgba8();
-        if let Some(lut) = &self.lut {
-            apply_lut(&mut rgba_image, &lut.lut);
-        }
-        *img = image::DynamicImage::ImageRgba8(rgba_image);
     }
 
     fn completing_save(&mut self) {
@@ -552,7 +580,26 @@ impl ImageViewer {
                             println!("Hiba a WebP mentésekor: {}", e);
                         }
                     }
-                    _ => {}
+                    SaveFormat::Tif => {
+                        let file = std::fs::File::create(&save_data.full_path).unwrap();
+                        let writer = std::io::BufWriter::new(file);
+                        let encoder = image::codecs::tiff::TiffEncoder::new(writer);
+                        use image::ImageEncoder; 
+                        
+                        if let Err(e) = encoder.write_image(
+                            img.as_bytes(), 
+                            img.width(), 
+                            img.height(), 
+                            img.color().into()
+                        ) {
+                            println!("Hiba a TIFF mentésekor: {}", e);
+                        }
+                    }
+                    SaveFormat::Png | SaveFormat::Bmp | SaveFormat::Gif => {
+                        if let Err(e) = img.save(&save_data.full_path) {
+                            println!("Hiba a mentéskor ({:?}): {}", save_data.saveformat, e);
+                        }
+                    }
                 }
             }
         }
@@ -642,6 +689,12 @@ impl ImageViewer {
         if let Some(filepath) = &self.image_full_path {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("IView")));
             if let Ok(mut img) = image::open(filepath) {
+                /*if self.image_format == SaveFormat::Tif {
+                    if let Ok(file) = std::fs::File::open(filepath) {
+                        if let Ok(decoder) = image::codecs::tiff::TiffDecoder::new(file) {
+                        }
+                    }
+                }*/
                 if let Ok(metadata) = fs::metadata(filepath) {
                     self.file_meta = Some(metadata);
                 }
@@ -711,12 +764,10 @@ impl eframe::App for ImageViewer {
         
         // Gyorsbillentyűk figyelése
         if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT | egui::Modifiers::SHIFT, egui::Key::C))) { // copy view
-            //println!("copy view");
             self.save_original = false;
             self.copy_to_clipboard();
         }        
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::SHIFT, egui::Key::S))) { // save view
-            //println!("save view");
             self.save_original = false;
             self.starting_save();
         }
@@ -755,7 +806,6 @@ impl eframe::App for ImageViewer {
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::C))) { // copy
             // not work with Ctrl
-            //println!("copy");
             self.save_original = true;
             self.copy_to_clipboard();
         }        
@@ -773,7 +823,6 @@ impl eframe::App for ImageViewer {
             self.load_image(ctx, true);
         }
         else if ctx.input_mut( |i| i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::S))) { // save
-            //println!("save");
             self.save_original = true;
             self.starting_save();
         }
@@ -1026,7 +1075,10 @@ impl eframe::App for ImageViewer {
                         if ui.radio_value(&mut self.bg_style, BackgroundStyle::Checkerboard, "Checkerboard").clicked() {
                             ui.close_menu();
                         }
-                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardColor, "CheckerboardColor").clicked() {
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardGM, "CheckerboardGreenMagenta").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardBB, "CheckerboardBlackBrown").clicked() {
                             ui.close_menu();
                         }
                     });
@@ -1047,69 +1099,96 @@ impl eframe::App for ImageViewer {
             });
         });
 
-        let mut in_w;
-        let mut in_h;
-        let old_size = self.image_size * self.magnify;
-        if self.first_appear > 0 {
-            if self.first_appear == 1 {
-                let outer_size = ctx.input(|i| { i.viewport().outer_rect.unwrap().size() });
-                let inner_size = ctx.input(|i| { i.screen_rect.size() });
-                self.frame = outer_size - inner_size;
-                self.frame.y += 20.0;
-                self.display_size_netto = ctx.input(|i| { i.viewport().monitor_size.unwrap() }) - self.frame;
+        egui::CentralPanel::default()
+                .frame(egui::Frame::none().inner_margin(0.0)) // Margók eltüntetése
+                .show(ctx, |ui| {
+            let mut in_w;
+            let mut in_h;
+            let old_size = self.image_size * self.magnify;
+            if self.first_appear > 0 {
+                if self.first_appear == 1 {
+                    let outer_size = ctx.input(|i| { i.viewport().outer_rect.unwrap().size() });
+                    let inner_size = ctx.input(|i| { i.screen_rect.size() });
+                    self.frame = outer_size - inner_size;
+                    self.frame.y += 20.0;
+                    self.display_size_netto = ctx.input(|i| { i.viewport().monitor_size.unwrap() }) - self.frame;
+                    //println!("out:{:?} in:{:?} frame:{:?} netto:{:?}", outer_size,inner_size,self.frame,self.display_size_netto);
+                }
+                let ratio = (self.display_size_netto) / self.image_size;
+                self.magnify = ratio.x.min(ratio.y); 
+                let round_ = if self.magnify < 1.0 { 0.0 } else { 0.5 };
+                self.magnify = (((self.magnify * 20.0 + round_) as i32) as f32) / 20.0; // round
+                in_w = (self.image_size.x * self.magnify).min(self.display_size_netto.x);
+                in_h = (self.image_size.y * self.magnify).min(self.display_size_netto.y);
+                let inner_size = egui::Vec2{ x: in_w + 4.0, y: in_h + 26.0};
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize( inner_size ));
+                if self.first_appear >0 {
+                    let pos = if self.center {egui::pos2((self.display_size_netto.x-in_w)/2.0-8.0, (self.display_size_netto.y-in_h)/2.0-10.0)} else {egui::pos2(-8.0, 0.0)};
+                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+                    //println!("inner:{:?} pos:{:?} magn: {:?}", inner_size, pos, self.magnify);
+                }
             }
-            let ratio = (self.display_size_netto-egui::Vec2{x:17.0, y:40.0}) / self.image_size;
-            self.magnify = ratio.x.min(ratio.y); 
-            let round_ = if self.magnify < 1.0 { 0.0 } else { 0.5 };
-            self.magnify = (((self.magnify * 20.0 + round_) as i32) as f32) / 20.0; // round
-            in_w = (self.image_size.x * self.magnify).min(self.display_size_netto.x-17.0);
-            in_h = (self.image_size.y * self.magnify).min(self.display_size_netto.y-40.0);
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize( egui::Vec2{ x: in_w + 17.0, y: in_h + 40.0} ));
-            if self.first_appear == 1 {
-                let pos = if self.center {egui::pos2((self.display_size_netto.x-in_w)/2.0-8.0, (self.display_size_netto.y-in_h)/2.0-10.0)} else {egui::pos2(-8.0, 0.0)};
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+
+            let mut zoom = 1.0;
+            if change_magnify != 0.0 {
+                let regi_nagyitas = self.magnify;
+                if self.magnify >= 1.0 { change_magnify *= 2.0; }
+                if self.magnify >= 4.0 { change_magnify *= 2.0; }
+                self.magnify = (regi_nagyitas * 1.0 + (0.05*change_magnify)).clamp(0.1, 10.0);
+                self.magnify = (((self.magnify * 100.0 + 0.5) as i32) as f32) / 100.0; // round
+
+                if self.magnify != regi_nagyitas {
+                    zoom = self.magnify / regi_nagyitas ;
+                    in_w = (self.image_size.x * self.magnify).min(self.display_size_netto.x);
+                    in_h = (self.image_size.y * self.magnify).min(self.display_size_netto.y);
+                    let inner_size = egui::Vec2{ x: in_w + 4.0, y: in_h + 26.0};
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize( inner_size ));
+                    let pos = if self.center {egui::pos2((self.display_size_netto.x-in_w)/2.0, (self.display_size_netto.y-in_h)/2.0)} else {egui::pos2(0.0, 0.0)};
+                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+                    //println!("inner:{:?} pos:{:?} magn: {:?}", inner_size, pos, self.magnify);
+               }
             }
-        }
-
-        let mut zoom = 1.0;
-        if change_magnify != 0.0 {
-            let regi_nagyitas = self.magnify;
-            if self.magnify >= 1.0 { change_magnify *= 2.0; }
-            if self.magnify >= 4.0 { change_magnify *= 2.0; }
-            self.magnify = (regi_nagyitas * 1.0 + (0.05*change_magnify)).clamp(0.1, 10.0);
-            self.magnify = (((self.magnify * 100.0 + 0.5) as i32) as f32) / 100.0; // round
-
-            if self.magnify != regi_nagyitas {
-                zoom = self.magnify / regi_nagyitas ;
-                in_w = (self.image_size.x * self.magnify).min(self.display_size_netto.x-17.0);
-                in_h = (self.image_size.y * self.magnify).min(self.display_size_netto.y-40.0);
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize( egui::Vec2{ x: in_w + 17.0, y: in_h + 40.0} ));
-                let pos = if self.center {egui::pos2((self.display_size_netto.x-in_w)/2.0-8.0, (self.display_size_netto.y-in_h)/2.0-10.0)} else {egui::pos2(-8.0, 0.0)};
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
-           }
-        }
-
-        egui::CentralPanel::default().show(ctx, |ui| {
+            /*if self.first_appear > 0 {
+                let available_rect = ui.available_rect_before_wrap();
+                let central_point = available_rect.center();
+                // A kép helyének kiszámítása a középpontból:
+                let image_rect = egui::Rect::from_center_size(
+                    central_point,
+                    egui::vec2(self.image_size.x * self.magnify, self.image_size.y * self.magnify)
+                );
+                println!("avail:{:?} centum:{:?} img:{:?}", available_rect, central_point, image_rect);
+            }*/
             if let Some(tex) = &self.textura {
                 let fill_color = egui::Color32::from_gray(0);
-                
                 egui::Frame::canvas(ui.style())
                     .fill(fill_color)
                     .show(ui, |ui| {
                         if self.image_format == SaveFormat::Png || self.image_format == SaveFormat::Webp {
                             let rect = ui.max_rect(); // A terület, ahová a kép kerülne
                             let paint = ui.painter();
+                            let (col1,col2) = if self.bg_style == BackgroundStyle::Checkerboard {
+                                (egui::Color32::from_gray(35), egui::Color32::from_gray(70))
+                            }
+                            else if self.bg_style == BackgroundStyle::CheckerboardGM {
+                                (egui::Color32::from_rgb(40,180,40), egui::Color32::from_rgb(180,50,180))
+                            }
+                            else if self.bg_style == BackgroundStyle::CheckerboardBB {
+                                (egui::Color32::from_rgb(0,0,0),egui::Color32::from_rgb(200,50,10))
+                            }
+                            else { (egui::Color32::BLACK, egui::Color32::WHITE) };
                             match self.bg_style {
                                 BackgroundStyle::Black => {paint.rect_filled(rect, 0.0, egui::Color32::BLACK);},
                                 BackgroundStyle::White => {paint.rect_filled(rect, 0.0, egui::Color32::WHITE);},
                                 BackgroundStyle::Gray => {paint.rect_filled(rect, 0.0, egui::Color32::from_gray(128));},
                                 BackgroundStyle::Green => {paint.rect_filled(rect, 0.0, egui::Color32::from_rgb(50,200,50));},
-                                BackgroundStyle::Checkerboard => {
-                                    paint.rect_filled(rect, 0.0, egui::Color32::from_gray(40));
+                                _ => {
+                                    paint.rect_filled(rect, 0.0, col1);
                                     let tile_size = 16.0; // A négyzetek mérete pixelben
-                                    let color_light = egui::Color32::from_gray(60);                                    
-                                    for y in 0..(rect.height() / tile_size) as i32 {
-                                        for x in 0..(rect.width() / tile_size) as i32 {
+                                    let color_light = col2;                                    
+                                    let num_x = (rect.width() / tile_size).ceil() as i32 +1;
+                                    let num_y = (rect.height() / tile_size).ceil() as i32 +1;
+                                    for y in 0..=num_y {
+                                        for x in 0..=num_x {
                                             if (x + y) % 2 == 0 {
                                                 let tile_rect = egui::Rect::from_min_size(
                                                     egui::pos2(
@@ -1118,30 +1197,10 @@ impl eframe::App for ImageViewer {
                                                     ),
                                                     egui::vec2(tile_size, tile_size),
                                                 );
-                                                if rect.contains_rect(tile_rect) {
-                                                    paint.rect_filled(tile_rect, 0.0, color_light);
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                BackgroundStyle::CheckerboardColor => {
-                                    paint.rect_filled(rect, 0.0, egui::Color32::from_rgb(50,200,50));
-                                    let tile_size = 16.0; // A négyzetek mérete pixelben
-                                    let color_light = egui::Color32::from_rgb(180,50,180);                                    
-                                    for y in 0..(rect.height() / tile_size) as i32 {
-                                        for x in 0..(rect.width() / tile_size) as i32 {
-                                            if (x + y) % 2 == 0 {
-                                                let tile_rect = egui::Rect::from_min_size(
-                                                    egui::pos2(
-                                                        rect.left() + x as f32 * tile_size,
-                                                        rect.top() + y as f32 * tile_size,
-                                                    ),
-                                                    egui::vec2(tile_size, tile_size),
-                                                );
-                                                if rect.contains_rect(tile_rect) {
-                                                    paint.rect_filled(tile_rect, 0.0, color_light);
-                                                }
+                                                let visible_tile = tile_rect.intersect(rect);
+                                                if visible_tile.width() > 0.0 && visible_tile.height() > 0.0 {
+                                                    paint.rect_filled(visible_tile, 0.0, color_light);
+                                                }                                                
                                             }
                                         }
                                     }
@@ -1182,9 +1241,11 @@ impl eframe::App for ImageViewer {
                             if new_size.y > self.display_size_netto.y { // need vertical scrollbar
                                 off.y = offset.y;
                             }
-
-                            //println!("{:?} {:?} {:?} {:?} {:?} {:?} {:?} {} {:?}",
-                            //    pointer, current_offset, off, ui_rect, inside, old_size, new_size, self.magnify, self.display_size_netto);
+                            if self.first_appear > 0 {
+                                //println!("p:{:?} c_of:{:?} o_of:{:?} o_si:{:?} n_si{:?} in:{:?} mag:{}",
+                                //    pointer, current_offset, off, old_size, new_size, inside, self.magnify);
+                                //println!();
+                            }
                         }
                         let mut scroll_area = egui::ScrollArea::both()
                             .id_salt(scroll_id)
@@ -1260,6 +1321,7 @@ impl eframe::App for ImageViewer {
                         ui.label("Size of image:");
                         ui.label(format!("{} x {} pixel", self.image_size.x, self.image_size.y));
                         ui.end_row();
+                        
 
                         // Fájlméret és dátum lekérése
                         if let Some(meta) = &self.file_meta {
@@ -1282,6 +1344,28 @@ impl eframe::App for ImageViewer {
 
                         // EXIF save_data kiírása (Dátum, Gépmodell)
                         if let Some(exif) = &self.exif {
+                            let x_res = exif.get_field(exif::Tag::XResolution, exif::In::PRIMARY);
+                            let y_res = exif.get_field(exif::Tag::YResolution, exif::In::PRIMARY);
+                            let unit = exif.get_field(exif::Tag::ResolutionUnit, exif::In::PRIMARY);
+
+                            if let (Some(x), Some(y)) = (x_res, y_res) {
+                                let x_val = x.display_value().to_string();
+                                let y_val = y.display_value().to_string();
+                                ui.label("Resolution:");
+                                // A ResolutionUnit 2 = Inch, 3 = Centimeter
+                                let unit_str = match unit.and_then(|u| u.value.get_uint(0)) {
+                                    Some(3) => "dpcm",
+                                    _ => "dpi",
+                                };
+                                if x_val == y_val {
+                                    ui.label(format!("{} {}", x_val, unit_str));
+                                }
+                                else {
+                                    ui.label(format!("{}x{} {}", x_val, y_val, unit_str));
+                                }
+                                ui.end_row();
+                            }
+                            
                             if let Some(f) = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY) {
                                 ui.label("Created:");
                                 ui.label(f.display_value().to_string());
