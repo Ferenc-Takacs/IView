@@ -118,7 +118,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 | R | Reopen same image (hide/show inside/outside modification)|
 | S | Save image  & convert to other type) |
 | Shift + S | Save modified view & convert |
-| Alt + C | Copy View  |
+| Alt + C | Copy |
 | Alt + Shift + C | Copy View  |
 | Alt + V | Paste  |
 | Escape | exit from popup windows or program  |
