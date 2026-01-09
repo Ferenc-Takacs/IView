@@ -113,7 +113,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 | Key | Function |
 | --- | --- |
-| B / N | Előző / Next image in directory |
+| B / N | Before / Next image in directory |
 | O | Open image |
 | R | Reopen same image (hide/show inside/outside modification)|
 | S | Save image  & convert to other type) |
