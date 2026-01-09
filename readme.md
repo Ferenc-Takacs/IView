@@ -138,6 +138,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 *   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
+*   **Executables:** in the executables folder 
+
 ### 🚀 Development / Fejlesztés
 
 ```bash
