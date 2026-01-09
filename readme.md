@@ -45,6 +45,8 @@
     *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors.
     *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
 
+![IView preview](screenshots/preview_transparent.webp)
+
 *   **💾 Save and Export**
 
     *   **Save:** It saves the original image while allowing you to switch to a different image format. In the case of Jpeg and Webp, you can also set the image quality for the save.
