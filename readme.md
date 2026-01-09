@@ -111,11 +111,11 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **⌨️ Gyorsbillentyűk / Shortcuts**
 
 
-| Billentyű | Function |
+| Key | Function |
 | --- | --- |
 | B / N | Előző / Next image in directory |
 | O | Open image |
-| R | Reopen same image (hide/show inside/outside modifification)|
+| R | Reopen same image (hide/show inside/outside modification)|
 | S | Save image  & convert to other type) |
 | Shift + S | Save modified view & convert |
 | Alt + C | Copy View  |
