@@ -109,6 +109,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 ---
 
 *   **⌨️ Gyorsbillentyűk / Shortcuts**
+
 | --- | --- |
 | Billentyű | Function |
 | --- | --- |
@@ -142,7 +143,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 ```bash
 # Build and run the project
 # Projekt fordítása és futtatása
-git clone github.com
+git clone https://github.com/Ferenc-Takacs/IView.git
 cd IView
 cargo run --release
 ```
