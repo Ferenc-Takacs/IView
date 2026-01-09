@@ -5,6 +5,58 @@
 
 ---
 
+## 🇺🇸 English Description
+
+**IView** is a versatile image viewer application designed to provide efficient image management and basic editing tools, leveraging the performance and safety of the Rust ecosystem.
+
+![IView preview](screenshots/preview.png)
+
+### Key Features:
+*   **📂 Image Browsing:** View images within a specific directory with forward/backward navigation and various sorting options.
+*   **📋 Clipboard Integration:**
+    *   Display images directly from the clipboard.
+    *   Copy the currently displayed image to the clipboard.
+*   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, and `WEBP`.
+*   **🎨 Image Manipulation:**
+    *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
+    *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
+    *   **Adjustments:** Fine-tune Gamma, Contrast, and Brightness.
+    *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
+![IView preview](screenshots/preview_invert.jpg)
+*   **⚙️ Advanced Features:**
+    *   Display detailed image metadata and technical information.
+    *   **Geolocation:** View stored location data directly in Google Maps.
+    *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
+    *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
+    *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
+
+### 📖 User Guide
+
+*   **📂 Image Management and Browsing**
+
+    *   **Launching:** You can start the program from the command line or by clicking on its icon.
+    *   **Opening:** When opened, it opens the image in the command line, or the image dragged to the shortcut, if none, the image on the clipboard, or if none, the image specified in the dialog that appears. You can also stop the program by interrupting it in the dialog. This way, the image copied in your browser can be viewed and converted immediately. 
+    *   **Changing the image:** To open new images while working, use the File/Open menu item, or drag and drop an image into the window, copy from the clipboard, or navigate forward or backward through the images in the library according to the specified sorting order.
+
+*   **🎨 Editing and Displaying**
+
+    *   **Position:** The displayed image is either in the center of the screen or in the upper left corner. The window can be dragged, but it repositions the window when changing images.
+    *   **Zoom:** You can use the slider or mouse wheel to zoom in from 0.1x to 10x. The window will expand to the maximum size of the screen, and you can move the invisible parts of the image by dragging the image or using the slider within the window.
+    *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors.
+    *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
+
+*   **💾 Save and Export**
+
+    *   **Save:** It saves the original image while allowing you to switch to a different image format. In the case of Jpeg and Webp, you can also set the image quality for the save.
+    *   **Copy:** The origin puts an image on the clipboard so other programs can copy it directly (rgba color model).
+    *   **Save View:** Saves the image with the current changes (rotation, colors, zoom). If you are at 0.5x zoom, the image will be saved at half the size.
+    *   **Copy View:** Puts the modified image on the clipboard, with pin-sharp Lanczos3 resampling.
+    *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
+    *   **Restriction:** Since the interface used swallows it, the usual Ctrl+c Ctrl+v combination cannot be used. Instead, there is Alt+c, Alt+v.
+    *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
+
+---
+
 ## 🇭🇺 Magyar leírás
 
 Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos kiegészítő funkcióval segíti a képek kezelését és alapvető szerkesztését, kihasználva a Rust sebességét és biztonságát.
@@ -56,59 +108,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 ---
 
-## 🇺🇸 English Description
-
-**IView** is a versatile image viewer application designed to provide efficient image management and basic editing tools, leveraging the performance and safety of the Rust ecosystem.
-
-![IView preview](screenshots/preview.png)
-
-### Key Features:
-*   **📂 Image Browsing:** View images within a specific directory with forward/backward navigation and various sorting options.
-*   **📋 Clipboard Integration:**
-    *   Display images directly from the clipboard.
-    *   Copy the currently displayed image to the clipboard.
-*   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, and `WEBP`.
-*   **🎨 Image Manipulation:**
-    *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
-    *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
-    *   **Adjustments:** Fine-tune Gamma, Contrast, and Brightness.
-    *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
-![IView preview](screenshots/preview_invert.jpg)
-*   **⚙️ Advanced Features:**
-    *   Display detailed image metadata and technical information.
-    *   **Geolocation:** View stored location data directly in Google Maps.
-    *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
-    *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
-    *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
-
-### 📖 User Guide
-
-*   **📂 Image Management and Browsing**
-
-    *   **Launching:** You can start the program from the command line or by clicking on its icon.
-    *   **Opening:** When opened, it opens the image in the command line, or the image dragged to the shortcut, if none, the image on the clipboard, or if none, the image specified in the dialog that appears. You can also stop the program by interrupting it in the dialog. This way, the image copied in your browser can be viewed and converted immediately. 
-    *   **Changing the image:** To open new images while working, use the File/Open menu item, or drag and drop an image into the window, copy from the clipboard, or navigate forward or backward through the images in the library according to the specified sorting order.
-
-*   **🎨 Editing and Displaying**
-
-    *   **Position:** The displayed image is either in the center of the screen or in the upper left corner. The window can be dragged, but it repositions the window when changing images.
-    *   **Zoom:** You can use the slider or mouse wheel to zoom in from 0.1x to 10x. The window will expand to the maximum size of the screen, and you can move the invisible parts of the image by dragging the image or using the slider within the window.
-    *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors.
-    *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
-
-*   **💾 Save and Export**
-
-    *   **Save:** It saves the original image while allowing you to switch to a different image format. In the case of Jpeg and Webp, you can also set the image quality for the save.
-    *   **Copy:** The origin puts an image on the clipboard so other programs can copy it directly (rgba color model).
-    *   **Save View:** Saves the image with the current changes (rotation, colors, zoom). If you are at 0.5x zoom, the image will be saved at half the size.
-    *   **Copy View:** Puts the modified image on the clipboard, with pin-sharp Lanczos3 resampling.
-    *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
-    *   **Restriction:** Since the interface used swallows it, the usual Ctrl+c Ctrl+v combination cannot be used. Instead, there is Alt+c, Alt+v.
-    *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
-
-
----
 *   **⌨️ Gyorsbillentyűk / Shortcuts**
+|---|---|
 | Billentyű | Function |
 | B / N | Előző / Next image in directory |
 | O | Open image |
