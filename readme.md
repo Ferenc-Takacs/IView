@@ -29,6 +29,32 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
     *   **Prémium átméretezés:** Mentésnél és másolásnál az alkalmazás Lanczos3 mintavételezést használ, ami tűéles minőséget biztosít kicsinyítés esetén is.
 ---
+### 📖 Használati útmutató
+
+*   **📂 Képkezelés és Böngészés**
+
+    *   **Indítás:** A programot indíthatod parancssorból, vagy az ikonjára kattintva.
+    *   **Megnyitás:** Megnyitáskor a parancssorban levő képet, vagy a parancsikonra húzott képet, ennek hiányában a vágólapon levő képet, ennek hiányában a feljövő dialógban megadott képet nyitja meg. A dialógban való megszakítással le is állíthatod a programot. Így a böngésződben másolt kép azonnal megnézhető, és átalakítható. 
+    *   **A kép váltása:** Menet közbeni újabb képek megnyitására használd a File/Open menüpontot, vagy húzz be egy képet az ablakba (Drag & Drop), vagy a vágólapról másolj, vagy navigálj a könyvtárban levő képeken előre, vagy hátra a megadott rendezési sorrend szerint.
+
+*   **🎨 Szerkesztés és Megjelenítés**
+
+    *   **Pozíció:** A megjelenített kép vagy a képernyő közepén, vagy a bal felső sarokban jelenik meg. Az ablak elhúzható, de képváltáskor újra pozicionálja az ablakot.
+    *   **Nagyítás:** A csúszkával vagy egérgörgővel 0.1x és 10x közötti mérettartományt érhetsz el. Az ablak maximum a képernyő nagyságáig növekszik, a nem látható részeket a kép húzásával, vagy a csúszkával mozgathatjuk az ablakon belül.
+    *   **Képkorrekció:** Állítsd a Gammát, Kontrasztot és Világosságot valós időben. A Color menüben ki/be kapcsolhatod a piros, zöld és kék csatornákat, inverz színeket is beállíthatsz.
+    *   **Háttérstílusok:** Átlátszó (Png/WebP/Bmp/Tiff) képek esetén a View -> Background Style menüben választhatsz fekete, fehér, szürke vagy a különböző sakktábla minták között.
+
+*   **💾 Mentés és Exportálás**
+
+    *   **Save:** Elmenti az eredeti képet, miközben más kép formátumra válthatsz. Jpeg és Webp esetén a mentés képminőségét is beállíthatod.
+    *   **Copy:** Az eredet képet teszi a vágólapra, így más programok közvetlenül átvehetik azt (rgba színmodell).
+    *   **Save View:** Elmenti a képet a jelenlegi módosításokkal (forgatás, színek, nagyítás). Ha 0.5x nagyításon állsz, a kép feleakkora méretben kerül mentésre.
+    *   **Copy View:** A módosított képet teszi a vágólapra, tűéles Lanczos3 újramintavételezéssel.
+    *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif. Animált képeknél jelenleg az első képet olvassa.
+    *   **Korlátozás:** Mivel a használt interfész lenyeli, így nem használható a szokásos Ctrl+c Ctrl+v kombináció. Helyette Alt+c, Alt+v van.
+    *   **GPS adatok:** Ha a kép tartalmaz geolokációs metaadatokat, az Info panelen megjelenik egy gomb, amellyel a helyszín közvetlenül megnyitható a Google Maps-en.
+
+---
 
 ## 🇺🇸 English Description
 
@@ -54,12 +80,54 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
     *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
     *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
-### ✨ Export & Workflow
-- **Save View / Copy View**: Don't just view – export! Any adjustments you make (Gamma, Rotation, Zoom) are baked into the output.
-- **Smart Resizing**: If you are zoomed out to 0.5x, "Save View" will export a half-sized image using high-quality Lanczos3 filtering.
+
+### 📖 User Guide
+
+*   **📂 Image Management and Browsing**
+
+    *   **Launching:** You can start the program from the command line or by clicking on its icon.
+    *   **Opening:** When opened, it opens the image in the command line, or the image dragged to the shortcut, if none, the image on the clipboard, or if none, the image specified in the dialog that appears. You can also stop the program by interrupting it in the dialog. This way, the image copied in your browser can be viewed and converted immediately. 
+    *   **Changing the image:** To open new images while working, use the File/Open menu item, or drag and drop an image into the window, copy from the clipboard, or navigate forward or backward through the images in the library according to the specified sorting order.
+
+*   **🎨 Editing and Displaying**
+
+    *   **Position:** The displayed image is either in the center of the screen or in the upper left corner. The window can be dragged, but it repositions the window when changing images.
+    *   **Zoom:** You can use the slider or mouse wheel to zoom in from 0.1x to 10x. The window will expand to the maximum size of the screen, and you can move the invisible parts of the image by dragging the image or using the slider within the window.
+    *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors.
+    *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
+
+*   **💾 Save and Export**
+
+    *   **Save:** It saves the original image while allowing you to switch to a different image format. In the case of Jpeg and Webp, you can also set the image quality for the save.
+    *   **Copy:** The origin puts an image on the clipboard so other programs can copy it directly (rgba color model).
+    *   **Save View:** Saves the image with the current changes (rotation, colors, zoom). If you are at 0.5x zoom, the image will be saved at half the size.
+    *   **Copy View:** Puts the modified image on the clipboard, with pin-sharp Lanczos3 resampling.
+    *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
+    *   **Restriction:** Since the interface used swallows it, the usual Ctrl+c Ctrl+v combination cannot be used. Instead, there is Alt+c, Alt+v.
+    *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
+
 
 ---
+*   **⌨️ Gyorsbillentyűk / Shortcuts**
+| Billentyű | Function |
+| B / N | Előző / Next image in directory |
+| O | Open image |
+| R | Reopen same image |
+| S | Save image  & convert to other type) |
+| Shift + S | Save modified view & convert |
+| Alt + C | Copy View  |
+| Alt + Shift + C | Copy View  |
+| Alt + V | Paste  |
+| Escape | exit from popup windows or program  |
+| Ctrl + R | Toggle red channel |
+| Ctrl + G | Toggle greeen channel |
+| Ctrl + B | Toggle blue channel |
+| Ctrl + I | Invert color channels |
+| C | Open color corrections window |
+| I | Open informations window |
+| D | Toggle backgrounds for transparent images |
 
+---
 ### 🛠 Tech Stack / Technológiai háttér
 
 *   **Language:** [Rust](https://www.rust-lang.org)
@@ -72,6 +140,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 ```bash
 # Build and run the project
 # Projekt fordítása és futtatása
+git clone github.com
+cd IView
 cargo run --release
 ```
 ![IView preview](screenshots/preview.jpg)

@@ -3,8 +3,7 @@ iview/src/main.rs
 
 Created by Ferenc Takács in 2026
 
-TODO
- gif, és webp animációk megjelenítése
+TODO    showing gif, és webp animations
  
 */
 
@@ -24,12 +23,12 @@ use directories::ProjectDirs;
  
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let start_image = if args.len() > 1 {
+    let (start_image, board ) = if args.len() > 1 {
         // Ha van argumentum, azt útvonalként kezeljük
-        Some(PathBuf::from(&args[1]))
+        (Some(PathBuf::from(&args[1])), false)
     } else {
         // 2. Ha nincs, megnézzük a vágólapot (Ctrl+C-vel másolt kép)
-        save_clipboard_image()
+        (save_clipboard_image(), true)
     };
     
     let icon = load_icon();
@@ -49,7 +48,7 @@ fn main() -> eframe::Result<()> {
             
             app.color_settings  = saved.color_settings;
             app.sort            = saved.sort_dir;
-            app.image_full_path = saved.last_folder;            
+            app.image_full_path = saved.last_image;
             app.magnify         = saved.magnify;
             app.refit_reopen    = saved.refit_reopen;
             app.center          = saved.center;
@@ -58,7 +57,13 @@ fn main() -> eframe::Result<()> {
 
             if let Some(path) = start_image {
                 // Betöltjük az indítási képet
-                app.image_full_path = Some(path); // nem állunk rá a tmp könyvtárra
+                if board { // az előző könyvtárt vesszük
+                    app.make_image_list()
+                }
+                app.image_full_path = Some(path);
+                if !board { // nem állunk rá a tmp könyvtárra
+                    app.make_image_list()
+                }
                 app.lut = None;
                 app.load_image(&cc.egui_ctx, false);
             }
@@ -228,9 +233,9 @@ enum BackgroundStyle {
     Gray,
     White,
     Green,
-    Checkerboard,
-    CheckerboardGM,
-    CheckerboardBB,
+    DarkBright,
+    GreenMagenta,
+    BlackBrown,
 }
 
 impl BackgroundStyle {
@@ -239,10 +244,10 @@ impl BackgroundStyle {
             BackgroundStyle::Black => BackgroundStyle::Gray,
             BackgroundStyle::Gray => BackgroundStyle::White,
             BackgroundStyle::White => BackgroundStyle::Green,
-            BackgroundStyle::Green => BackgroundStyle::Checkerboard,
-            BackgroundStyle::Checkerboard => BackgroundStyle::CheckerboardGM,
-            BackgroundStyle::CheckerboardGM => BackgroundStyle::CheckerboardBB,
-            BackgroundStyle::CheckerboardBB => BackgroundStyle::Black,
+            BackgroundStyle::Green => BackgroundStyle::DarkBright,
+            BackgroundStyle::DarkBright => BackgroundStyle::GreenMagenta,
+            BackgroundStyle::GreenMagenta => BackgroundStyle::BlackBrown,
+            BackgroundStyle::BlackBrown => BackgroundStyle::Black,
         }
     }
 }
@@ -276,7 +281,7 @@ struct SaveSettings {
 struct AppSettings {
     color_settings: ColorSettings,
     sort_dir: SortDir,
-    last_folder: Option<PathBuf>,
+    last_image: Option<PathBuf>,
     magnify: f32,
     refit_reopen: bool,
     center: bool,
@@ -289,12 +294,12 @@ impl Default for AppSettings {
         Self {
             color_settings: ColorSettings::default(),
             sort_dir: SortDir::Name,
-            last_folder: None,
+            last_image: None,
             magnify: 1.0,
             refit_reopen: false,
             center: true,
             fit_open: true,
-            bg_style: BackgroundStyle::Checkerboard,
+            bg_style: BackgroundStyle::DarkBright,
         }
     }
 }
@@ -375,7 +380,7 @@ impl Default for ImageViewer {
             fit_open: true,
             exif: None,
             save_original: false, //always set before use
-            bg_style: BackgroundStyle::Checkerboard,
+            bg_style: BackgroundStyle::DarkBright,
         }
     }
 }
@@ -387,7 +392,7 @@ impl ImageViewer {
         let settings = AppSettings {
             color_settings: self.color_settings,
             sort_dir:       self.sort,
-            last_folder:    self.image_folder.clone(),
+            last_image:     self.image_full_path.clone(),
             magnify:        self.magnify,
             refit_reopen:   self.refit_reopen,
             center:         self.center,
@@ -1072,13 +1077,13 @@ impl eframe::App for ImageViewer {
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::Checkerboard, "Checkerboard").clicked() {
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::DarkBright, "🏁 DarkBright").clicked() {
                             ui.close_menu();
                         }
-                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardGM, "CheckerboardGreenMagenta").clicked() {
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::GreenMagenta, "🏁 GreenMagenta").clicked() {
                             ui.close_menu();
                         }
-                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::CheckerboardBB, "CheckerboardBlackBrown").clicked() {
+                        if ui.radio_value(&mut self.bg_style, BackgroundStyle::BlackBrown, "🏁 BlackBrown").clicked() {
                             ui.close_menu();
                         }
                     });
@@ -1098,6 +1103,22 @@ impl eframe::App for ImageViewer {
                 }
             });
         });
+
+        let dropped_file = ctx.input_mut(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                let files = std::mem::take(&mut i.raw.dropped_files);
+                files.first().and_then(|f| f.path.clone())
+            } else {
+                None
+            }
+        });
+        if let Some(path) = dropped_file {
+            self.image_full_path = Some(path.to_path_buf());
+            self.make_image_list();
+            self.lut = None;
+            self.load_image(&ctx, false);
+            println!("Fájl behúzva: {:?}", path);
+        }
 
         egui::CentralPanel::default()
                 .frame(egui::Frame::none().inner_margin(0.0)) // Margók eltüntetése
@@ -1163,16 +1184,20 @@ impl eframe::App for ImageViewer {
                 egui::Frame::canvas(ui.style())
                     .fill(fill_color)
                     .show(ui, |ui| {
-                        if self.image_format == SaveFormat::Png || self.image_format == SaveFormat::Webp {
+                        //if self.image_format == SaveFormat::Png || self.image_format == SaveFormat::Webp {
                             let rect = ui.max_rect(); // A terület, ahová a kép kerülne
+                            if rect.width() <= 0.0 {
+                                ui.ctx().request_repaint();
+                                return; 
+                            }
                             let paint = ui.painter();
-                            let (col1,col2) = if self.bg_style == BackgroundStyle::Checkerboard {
+                            let (col1,col2) = if self.bg_style == BackgroundStyle::DarkBright {
                                 (egui::Color32::from_gray(35), egui::Color32::from_gray(70))
                             }
-                            else if self.bg_style == BackgroundStyle::CheckerboardGM {
+                            else if self.bg_style == BackgroundStyle::GreenMagenta {
                                 (egui::Color32::from_rgb(40,180,40), egui::Color32::from_rgb(180,50,180))
                             }
-                            else if self.bg_style == BackgroundStyle::CheckerboardBB {
+                            else if self.bg_style == BackgroundStyle::BlackBrown {
                                 (egui::Color32::from_rgb(0,0,0),egui::Color32::from_rgb(200,50,10))
                             }
                             else { (egui::Color32::BLACK, egui::Color32::WHITE) };
@@ -1200,13 +1225,13 @@ impl eframe::App for ImageViewer {
                                                 let visible_tile = tile_rect.intersect(rect);
                                                 if visible_tile.width() > 0.0 && visible_tile.height() > 0.0 {
                                                     paint.rect_filled(visible_tile, 0.0, color_light);
-                                                }                                                
+                                                }
                                             }
                                         }
                                     }
                                 },
                             }
-                        }
+                        //}
                         
                         let new_size = self.image_size * self.magnify;
                         let scroll_id = ui.make_persistent_id("kep_scroll");
