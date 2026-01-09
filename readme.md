@@ -110,7 +110,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 *   **⌨️ Gyorsbillentyűk / Shortcuts**
 
-| --- | --- |
+
 | Billentyű | Function |
 | --- | --- |
 | B / N | Előző / Next image in directory |
