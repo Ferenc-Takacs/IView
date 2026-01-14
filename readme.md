@@ -17,7 +17,7 @@
     *   Display images directly from the clipboard.
     *   Copy the currently displayed image to the clipboard.
 *   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, and `WEBP`.
-*   **💾 Recent path:** Bring short the recent files and path for open, and save manipulations.
+*   **💾 Recent path:** Quick access to previously used files and their paths for reading and saving.
 *   **🎨 Image Manipulation:**
     *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
@@ -71,7 +71,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Vágólapon lévő képek közvetlen megjelenítése.
     *   A megnyitott kép vágólapra másolása.
 *   **💾 Konvertálás:** Képek mentése különböző formátumokba: `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, `WEBP`.
-*   **💾 Legutóbbi útvonalak:** Gyors elérése a korábban használt fájlol, és útvonalaik használatára beolvasáshoz, és mentéshez.
+*   **💾 Legutóbbi útvonalak:** Gyors elérése a korábban használt fájlok, és útvonalaik használatára beolvasáshoz, és mentéshez.
 *   **🎨 Képmódosítások:**
     *   **Nagyítás/Kicsinyítés:** Skálázható méret 0.1-től egészen 10-es szorzóig.
     *   **Forgatás:** Gyors elforgatás (0°, 90°, 180°, 270°).
