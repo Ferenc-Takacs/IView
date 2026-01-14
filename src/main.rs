@@ -16,7 +16,7 @@ TODO
 */
 
 // disable terminal window beyond graphic window in release version
-//#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod gpu_colors;
 use gpu_colors::GpuInterface;

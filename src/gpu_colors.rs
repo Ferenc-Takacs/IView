@@ -1,7 +1,7 @@
-use eframe::wgpu;
+//use eframe::wgpu;
 use crate::ColorSettings;
-use wgpu::util::DeviceExt;
-use std::sync::Arc;
+//use wgpu::util::DeviceExt;
+//use std::sync::Arc;
 
 // Ez kényszeríti a Rustot, hogy figyelje a shader fájlt
 //const _: &str = include_str!("shaders.wgsl");
@@ -25,7 +25,7 @@ pub struct GpuColorSettings {
 
 
 pub struct GpuInterface {
-    device: Arc<wgpu::Device>,
+    /*device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     
     // Shader Pipeline-ok
@@ -40,7 +40,7 @@ pub struct GpuInterface {
     params_buffer: wgpu::Buffer,
     
     // Bind Group Layouts (az újraépítéshez)
-    bg_layout_apply: wgpu::BindGroupLayout,
+    bg_layout_apply: wgpu::BindGroupLayout,*/
 }
 
 impl GpuInterface {
