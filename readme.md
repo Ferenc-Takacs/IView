@@ -17,15 +17,17 @@
     *   Display images directly from the clipboard.
     *   Copy the currently displayed image to the clipboard.
 *   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, and `WEBP`.
+*   **💾 Recent path:** Bring short the recent files and path for open, and save manipulations.
 *   **🎨 Image Manipulation:**
     *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
-    *   **Adjustments:** Fine-tune Gamma, Contrast, and Brightness.
+    *   **Adjustments:** Fine-tune Gamma, Contrast, Hue, Saturation and Brightness.
     *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
 ![IView preview](screenshots/preview_invert.jpg)
 *   **⚙️ Advanced Features:**
     *   Display detailed image metadata and technical information.
     *   **Geolocation:** View stored location data directly in Google Maps.
+    *   **Animation** Read, and show Webp and Gif animations.
     *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
     *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
     *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
@@ -69,6 +71,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Vágólapon lévő képek közvetlen megjelenítése.
     *   A megnyitott kép vágólapra másolása.
 *   **💾 Konvertálás:** Képek mentése különböző formátumokba: `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, `WEBP`.
+*   **💾 Legutóbbi útvonalak:** Gyors elérése a korábban használt fájlol, és útvonalaik használatára beolvasáshoz, és mentéshez.
 *   **🎨 Képmódosítások:**
     *   **Nagyítás/Kicsinyítés:** Skálázható méret 0.1-től egészen 10-es szorzóig.
     *   **Forgatás:** Gyors elforgatás (0°, 90°, 180°, 270°).
@@ -77,6 +80,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **⚙️ Speciális funkciók:**
     *   Részletes képinformációk és metaadatok megjelenítése.
     *   **Geolokáció:** Tárolt GPS koordináták megnyitása közvetlenül a Google Maps alkalmazásban.
+    *   **Animáció** A Webp and Gif animációk olvasása, lejátszása.
     *   **GPU Optimalizálás:** A túl nagy panorámaképek automatikus átméretezése a grafikus processzorok (GPU) által megkövetelt maximum 16384 x 16384 képpontos méretre.
     *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
     *   **Prémium átméretezés:** Mentésnél és másolásnál az alkalmazás Lanczos3 mintavételezést használ, ami tűéles minőséget biztosít kicsinyítés esetén is.
@@ -138,7 +142,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 
 *   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
-*   **Executables:** in the executables folder 
+*   **Executables:** in the executables folder
+*   **Latest Version:** 0.2.0 
 
 ### 🚀 Development / Fejlesztés
 
