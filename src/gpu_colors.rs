@@ -1,5 +1,5 @@
 use eframe::wgpu;
-use crate::ColorSettings;
+use crate::colors::ColorSettings;
 //use wgpu::util::DeviceExt;
 use std::sync::Arc;
 
@@ -20,13 +20,14 @@ pub struct GpuColorSettings {
     pub show_r: u32,
     pub show_g: u32,
     pub show_b: u32,
-    pub _padding: [f32; 2], // 16 bájtos igazítás
+    pub oklab: u32,
+    pub _padding: u32, // 16 bájtos igazítás
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GpuFilterSettings {
-    pub blur_radius: f32,
+    pub sharpen_radius: f32,
     pub sharpen_amount: f32,
     pub image_width: f32,
     pub image_height: f32,
@@ -52,6 +53,12 @@ pub struct GpuInterface {
 impl GpuInterface {
     ///////////////////////////////////////////////////////////////////////////
     pub fn gpu_init(render_state: &egui_wgpu::RenderState) -> Option<Self> {
+        let limits = render_state.adapter.limits();
+        if limits.max_storage_textures_per_shader_stage < 1 {
+            eprintln!("Hiba: A GPU nem támogatja a Storage Texture-öket (VirtualBox/régi driver).");
+            return None;
+        }
+
         let device = render_state.device.clone();
         let queue = render_state.queue.clone();
 
@@ -251,12 +258,13 @@ impl GpuInterface {
             show_r: if colset.show_r { 1 } else { 0 },
             show_g: if colset.show_g { 1 } else { 0 },
             show_b: if colset.show_b { 1 } else { 0 },
-            _padding: [0.0; 2],
+            oklab: if colset.oklab { 1 } else { 0 },
+            _padding: 0,
         };
         self.queue.write_buffer(&self.params_buffer, 0, bytemuck::bytes_of(&gpu_settings));
 
         let gpu_filter = GpuFilterSettings {
-            blur_radius: colset.sharpen_radius,
+            sharpen_radius: colset.sharpen_radius,
             sharpen_amount: colset.sharpen_amount,
             image_width: width,
             image_height: height,

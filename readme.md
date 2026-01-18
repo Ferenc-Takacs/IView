@@ -22,13 +22,16 @@
 *   **🎨 Image Manipulation:**
     *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
-    *   **Adjustments:** Fine-tune Gamma, Contrast, Hue, Saturation and Brightness, Gaussian Blur/Sharpen.
+    *   **Adjustments:** Fine-tune Gamma, Contrast, Hue, Saturation and Brightness, Gaussian Blur/Sharpen, color rotation in Oklab or Hsv color space, color saturation adjustment.
     *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
+	
 ![IView preview](screenshots/preview_invert.jpg)
+
 *   **⚙️ Advanced Features:**
     *   Display detailed image metadata and technical information.
     *   **Geolocation:** View stored location data directly in Google Maps.
     *   **Animation** Read, and show Webp and Gif animations.
+    *   **PickPixel** Info about the position and color of a given point in the image.
     *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
     *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
     *   **High-Quality Scaling:** For saving and copying, the app utilizes Lanczos3 resampling to ensure professional-grade sharpness even when resizing.
@@ -47,7 +50,9 @@
     *   **Zoom:** You can use the slider or mouse wheel to zoom in from 0.1x to 10x. The window will expand to the maximum size of the screen, and you can move the invisible parts of the image by dragging the image or using the slider within the window.
     *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors.
     *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
+	
 ![IView preview](screenshots/preview_transparent.webp)
+
 *   **💾 Save and Export**
 
     *   **Save:** It saves the original image while allowing you to switch to a different image format. In the case of Jpeg and Webp, you can also set the image quality for the save.
@@ -58,7 +63,7 @@
     *   **Change:** It places the original image on the clipboard while importing the image there into the program.
     *   **Change View:** It places the modified image on the clipboard while importing the image that is there. This allows you to repeat the modifications.
     *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
-    *   **Restriction:** Since the interface used swallows it, the usual Ctrl+c Ctrl+v combination cannot be used. Instead, there is Alt+c, Alt+v.
+    *   **Restriction:** Since the interface used swallows it, the usual Ctrl+c Ctrl+v combination cannot be used. Instead, there is Alt+c, Alt+v. The program does not display images on a system installed in VirtualBox due to current limitations on GPU usage.
     *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
 
 ---
@@ -80,15 +85,19 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **🎨 Képmódosítások:**
     *   **Nagyítás/Kicsinyítés:** Skálázható méret 0.1-től egészen 10-es szorzóig.
     *   **Forgatás:** Gyors elforgatás (0°, 90°, 180°, 270°).
-    *   **Képkorrekció:** Gamma, kontraszt és világosság állítási lehetőség, Gaussian élesítés/homályosítás.
+    *   **Képkorrekció:** Gamma, kontraszt és világosság állítási lehetőség, Gaussian élesítés/homályosítás, színforgatás az Oklab vagy Hsv színtérben, színtelítettség állítás.
     *   **Színkezelés:** Színcsatornák (R, G, B) egyenkénti ki/be kapcsolása és inverz megjelenítés.
 *   **⚙️ Speciális funkciók:**
     *   Részletes képinformációk és metaadatok megjelenítése.
     *   **Geolokáció:** Tárolt GPS koordináták megnyitása közvetlenül a Google Maps alkalmazásban.
     *   **Animáció** A Webp and Gif animációk olvasása, lejátszása.
+    *   **PickPixel** Info a kép adott pontja pozíciójáról, és színéről.
     *   **GPU Optimalizálás:** A túl nagy panorámaképek automatikus átméretezése a grafikus processzorok (GPU) által megkövetelt maximum 16384 x 16384 képpontos méretre.
     *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
     *   **Prémium átméretezés:** Mentésnél és másolásnál az alkalmazás Lanczos3 mintavételezést használ, ami tűéles minőséget biztosít kicsinyítés esetén is.
+	
+![IView preview](screenshots/preview_a.png)
+
 ---
 ### 📖 Használati útmutató
 
@@ -115,7 +124,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Change:** Az eredeti képet a vágólapra teszi, miközben az ott levő képet hozza be programba.
     *   **Change View:** A módosított képet a vágólapra teszi, miközben az ott levő képet hozza be. Ez a módosítások ismétlését teszi lehetővé.
     *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif. Animált képeknél jelenleg az első képet olvassa.
-    *   **Korlátozás:** Mivel a használt interfész lenyeli, így nem használható a szokásos Ctrl+c Ctrl+v kombináció. Helyette Alt+c, Alt+v van.
+    *   **Korlátozás:** Mivel a használt interfész lenyeli, így nem használható a szokásos Ctrl+c Ctrl+v kombináció. Helyette Alt+c, Alt+v van. A program a GPU használat jelenlegi korlátozásai miatt nem jelenít meg képet VirtualBox-ban installált rendszerben.
     *   **GPS adatok:** Ha a kép tartalmaz geolokációs metaadatokat, az Info panelen megjelenik egy gomb, amellyel a helyszín közvetlenül megnyitható a Google Maps-en.
 
 ---
@@ -148,6 +157,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 | Ctrl + Rigth | Rotate 90° |
 | Ctrl + Up | Rotate 180° |
 | Ctrl + Down | Stand 0° |
+| Ctrl + Shift | Pick Pixel to Tooltip |
 
 ---
 ### 🛠 Tech Stack / Technológiai háttér

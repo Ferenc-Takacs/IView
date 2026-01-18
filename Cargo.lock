@@ -1867,6 +1867,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "img-parts"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19734e3c43b2a850f5889c077056e47c874095f2d87e853c7c41214ae67375f0"
+dependencies = [
+ "bytes",
+ "crc32fast",
+ "miniz_oxide",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1919,7 +1930,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "iview"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "arboard",
  "bmp",
@@ -1929,8 +1940,10 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "image",
+ "img-parts",
  "kamadak-exif",
  "png 0.17.16",
+ "rayon",
  "rfd",
  "serde",
  "serde_json",
