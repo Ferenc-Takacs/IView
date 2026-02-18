@@ -1,31 +1,34 @@
 [package]
 name = "iview"
-version = "0.4.0"
+version = "0.6.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 bmp = "0.5.0"
 image = { version = "0.25", features = ["jpeg", "png", "webp", "tiff"] }
-kamadak-exif = "0.5"
-rfd = "0.15"
-eframe = { version = "0.30.0", features = ["wgpu"] }
+kamadak-exif = "0.6.1"
+rfd = "0.17.2"
 arboard = "3.4"
 winres = "0.1"
 webp = "0.3"
+webp-animation = "0.9"
 webbrowser = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 directories = "6.0" # 2026-os stabil verzió
 time-format = "1.2.1"
-tiff = "0.9"
-png = "0.17"
-wgpu = "23.0" # Vagy az eframe által használt verzió
+tiff = "0.11.1"
+png = "0.18.0"
+gif = "0.13"
 bytemuck = { version = "1.14", features = ["derive"] }
-egui = "0.30"
-egui-wgpu = "0.30" # <--- Ez kell a Callback típushoz
+egui = "0.33"
 rayon = "1.10"
+chrono = "0.4"
 img-parts = "0.4.0"
+egui-wgpu = "0.33" # <--- Ez kell a Callback típushoz
+eframe = { version = "0.33.0", features = ["wgpu"] }
+base64 = "0.22.1"
 
 [build-dependencies]
 winres = "0.1"

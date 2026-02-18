@@ -153,6 +153,11 @@ struct FilterSettings {
     sharpen_amount: f32,   // 0.0 = kikapcsolva
     image_width: f32,
     image_height: f32,
+    transparency_tolerance: f32,
+    use_transparency: u32,
+    rough_transparency: u32,
+    _pad: f32,
+    transparent_color: vec4<f32>,
 }
 
 // Bindingok az alkalmazáshoz
@@ -163,42 +168,14 @@ struct FilterSettings {
 @group(1) @binding(4) var t_out: texture_storage_2d<rgba8unorm, write>;
 @group(1) @binding(5) var<uniform> colset_apply: GpuColorSettings;
 
-//@compute @workgroup_size(16, 16)
-//fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
-//    let dims_u32 = textureDimensions(t_src);
-//    if (id.x >= dims_u32.x || id.y >= dims_u32.y) { return; }
-//    let coords = vec2<i32>(id.xy);
-//    let dims = vec2<i32>(dims_u32);
-//    let center_color = textureLoad(t_src, coords, 0).rgb;
-//    var processed = center_color;
-//    var sum = vec3<f32>(0.0);
-//    var count = 0.0;
-//    let r = i32(f.sharpen_radius);
-//    if (r > 0 && f.sharpen_amount != 0) {
-//        for (var y: i32 = -r; y <= r; y++) {
-//            for (var x: i32 = -r; x <= r; x++) {
-//                let sample_coords = clamp(coords + vec2<i32>(x, y), vec2<i32>(0), dims - vec2<i32>(1));
-//                sum += textureLoad(t_src, sample_coords, 0).rgb;
-//                count += 1.0;
-//            }
-//        }
-//        let average_color = sum / count;
-//        let detail = center_color - average_color;
-//        processed = center_color + detail * f.sharpen_amount;
-//    }
-//    let lut_size = 33.0;
-//    let lut_coords = clamp(processed, vec3(0.0), vec3(1.0)) * ((lut_size - 1.0) / lut_size) + (0.5 / lut_size);
-//    let corrected = textureSampleLevel(t_lut, s_linear, lut_coords, 0.0).rgb;
-//    textureStore(t_out, coords, vec4<f32>(corrected, 1.0));
-//}
-
 @compute @workgroup_size(16, 16)
 fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
     let dims_u32 = textureDimensions(t_src);
     if (id.x >= dims_u32.x || id.y >= dims_u32.y) { return; }
     let coords = vec2<i32>(id.xy);
     let dims = vec2<i32>(dims_u32);
-    let center_color = textureLoad(t_src, coords, 0).rgb;
+    let original_pixel = textureLoad(t_src, coords, 0).rgba;
+    let center_color = original_pixel.rgb;
     var processed = center_color;
 	
     let r = i32(f.sharpen_radius*3.0+0.5) + 1;
@@ -266,11 +243,43 @@ fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let lut_size = 33.0;
     let lut_coords = clamp(processed, vec3(0.0), vec3(1.0)) * ((lut_size - 1.0) / lut_size) + (0.5 / lut_size);
-    let corrected = textureSampleLevel(t_lut, s_linear, lut_coords, 0.0).rgb;
-    textureStore(t_out, coords, vec4<f32>(corrected, 1.0));
+    var corrected_rgb = textureSampleLevel(t_lut, s_linear, lut_coords, 0.0).rgb;
+    var final_color = vec4<f32>(corrected_rgb, original_pixel.a);
+    if( f.use_transparency > 0u ) {
+        final_color = color_to_alpha( final_color );
+    }
+    textureStore(t_out, coords, final_color);
+}
+
+fn color_to_alpha(pixel: vec4<f32> ) -> vec4<f32> {
+    var out = pixel;
+    let tolerance = f.transparency_tolerance * 1.7294;
+    let dist = distance(pixel.rgb, f.transparent_color.rgb);
+
+    if dist < tolerance {
+        if f.transparency_tolerance < 0.001 {
+            out.a = 0;
+        }
+        else {
+            var alpha = dist / tolerance; 
+            if f.rough_transparency > 0u {
+                if alpha < 0.5 {
+                    out = f.transparent_color;
+                }
+                else {
+                    out.a = step(0.5, out.a);
+                }
+            }
+            else {
+                out.a = clamp( out.a * alpha, 0.0, 1.0);
+            }
+        }
+    }
+    return out;
 }
 
 fn get_gaussian_weight(dist: f32, sigma: f32) -> f32 {
     let s = 2.0 * sigma * sigma;
     return exp(-(dist * dist) / s);
 }
+

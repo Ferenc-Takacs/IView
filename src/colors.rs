@@ -1,9 +1,41 @@
 use rayon::prelude::*;
-//use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
 const TWO_PI: f32 = PI * 2.0;
+
+///////////////////////////////////////////////////////////////////////////
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub enum Rotate {
+    Rotate0,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+}
+impl Rotate {
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Rotate::Rotate0 => 0,
+            Rotate::Rotate90 => 1,
+            Rotate::Rotate180 => 2,
+            Rotate::Rotate270 => 3,
+        }
+    }
+
+    pub fn from_u8(v: u8) -> Self {
+        match v % 4 {
+            0 => Rotate::Rotate0,
+            1 => Rotate::Rotate90,
+            2 => Rotate::Rotate180,
+            3 => Rotate::Rotate270,
+            _ => Rotate::Rotate0,
+        }
+    }
+
+    pub fn add(self, other: Rotate) -> Rotate {
+        Rotate::from_u8(self.to_u8() + other.to_u8())
+    }
+}
 
 fn r(th: f32) -> f32 {
     let ra = 2.4285922050f32;
@@ -13,7 +45,7 @@ fn r(th: f32) -> f32 {
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct ColorSettings {
-    pub is_default: bool,
+    //pub is_default: bool,
     pub gamma: f32,
     pub contrast: f32,
     pub brightness: f32,
@@ -27,12 +59,15 @@ pub struct ColorSettings {
     pub sharpen_radius: f32, // 0.2 .. 3.0 // realy image setting
     pub rotate: Rotate, // realy image setting
     pub oklab: bool,
+    pub transparent_color: [u8; 4],
+    pub transparency_tolerance: f32, // 0.0 - 1.0
+    pub use_transparency: bool,
+    pub rough_transparency: bool,
 }
 
 impl ColorSettings {
     pub fn default() -> Self {
         Self {
-            is_default : true,
             gamma: 1.0,
             contrast: 0.0,
             brightness: 0.0,
@@ -46,26 +81,29 @@ impl ColorSettings {
             sharpen_radius: 0.2, // 0.2 .. 3.0
             rotate: Rotate::Rotate0,
             oklab: true,
+            transparent_color: [255, 255, 255, 0],
+            transparency_tolerance: 0.0,
+            use_transparency: false,
+            rough_transparency: false,
         }
     }
     
     pub fn is_setted(&self) -> bool {
-        let is_default = 
-            (self.gamma - 1.0).abs() < 0.001 &&
+            !((self.gamma - 1.0).abs() < 0.001 &&
             self.contrast.abs() < 0.001 &&
             self.brightness.abs() < 0.001 &&
             self.hue_shift.abs() < 0.001 &&
             self.saturation.abs() < 0.001 &&
             self.show_r && self.show_g && self.show_b &&
-            !self.invert &&
-            self.sharpen_amount.abs() < 0.001;
-        !is_default
+            !self.invert)
+    }
+    pub fn is_blured(&self) -> bool {
+        self.sharpen_amount.abs() >= 0.001 || self.use_transparency
     }
 
-    pub fn convert(&self, color: &mut [f32; 3] ) {
-        //if self.is_default  { return; }
+    pub fn convert(&self, color: &mut [f32; 4] ) {
         if self.invert {
-            *color = [1.0 - color[0], 1.0 - color[1], 1.0 - color[2]];
+            *color = [1.0 - color[0], 1.0 - color[1], 1.0 - color[2], color[3]];
         }
         *color = self.apply_color_settings(*color);
         let factor = (1.015 * (self.contrast + 1.0)) / (1.015 - self.contrast);
@@ -81,7 +119,7 @@ impl ColorSettings {
         if !self.show_b { color[2] = 0.0 };
     }
 
-    pub fn apply_color_settings(&self, rgb: [f32; 3] ) -> [f32; 3] {
+    pub fn apply_color_settings(&self, rgb: [f32; 4] ) -> [f32; 4] {
         
         let mut hsv = if self.oklab { Self::rgb_to_oklab(rgb) } else { Self::rgb_to_hsv(rgb) };
 
@@ -98,7 +136,7 @@ impl ColorSettings {
         if self.oklab { Self::oklab_to_rgb(hsv) } else { Self::hsv_to_rgb(hsv) }
     }
 
-    pub fn rgb_to_hsv(rgb: [f32; 3]) -> [f32; 3] {
+    pub fn rgb_to_hsv(rgb: [f32; 4]) -> [f32; 4] {
         let r = rgb[0];
         let g = rgb[1];
         let b = rgb[2];
@@ -122,16 +160,17 @@ impl ColorSettings {
             h /= 6.0; // Normalizálás 0.0 - 1.0 közé
         }
 
-        [h, s, v]
+        [h, s, v, rgb[3]]
     }
 
-    pub fn hsv_to_rgb(hsv: [f32; 3]) -> [f32; 3] {
+    pub fn hsv_to_rgb(hsv: [f32; 4]) -> [f32; 4] {
         let h = hsv[0];
         let s = hsv[1];
         let v = hsv[2];
+        let a = hsv[3];
         if s <= 0.0 {
             // Ha a telítettség 0, akkor a szín a szürke árnyalata (v)
-            return [v, v, v];
+            return [v, v, v, a];
         }
         // A színkört 6 szektorra osztjuk (0-tól 5-ig)
         // A modulo 1.0 biztosítja, hogy a 1.0 feletti értékek is körbeforduljanak
@@ -143,16 +182,16 @@ impl ColorSettings {
         let q = v * (1.0 - (s * ff));
         let t = v * (1.0 - (s * (1.0 - ff)));
         match i {
-            0 => [v, t, p],
-            1 => [q, v, p],
-            2 => [p, v, t],
-            3 => [p, q, v],
-            4 => [t, p, v],
-            _ => [v, p, q], // Az 5. szektor és biztonsági fallback
+            0 => [v, t, p, a],
+            1 => [q, v, p, a],
+            2 => [p, v, t, a],
+            3 => [p, q, v, a],
+            4 => [t, p, v, a],
+            _ => [v, p, q, a], // Az 5. szektor és biztonsági fallback
         }
     }
     
-    pub fn rgb_to_oklab(rgb: [f32; 3]) -> [f32; 3] {
+    pub fn rgb_to_oklab(rgb: [f32; 4]) -> [f32; 4] {
         let l = 0.4122214708f32 * rgb[0] + 0.5363325363f32 * rgb[1] + 0.0514459929f32 * rgb[2];
         let m = 0.2119034982f32 * rgb[0] + 0.6806995451f32 * rgb[1] + 0.1073969566f32 * rgb[2];
         let s = 0.0883024619f32 * rgb[0] + 0.2817188376f32 * rgb[1] + 0.6299787005f32 * rgb[2];
@@ -172,10 +211,10 @@ impl ColorSettings {
         if hue < 0.0 { hue += TWO_PI; }
         hue /= TWO_PI; // from 0.0  to  1.0
 
-        [  hue, sat_norm, lt ]
+        [  hue, sat_norm, lt, rgb[3] ]
     }
 
-    pub fn oklab_to_rgb(oklab: [f32; 3]) -> [f32; 3] {
+    pub fn oklab_to_rgb(oklab: [f32; 4]) -> [f32; 4] {
         let lt = oklab[2];
         let angle = oklab[0] * TWO_PI;
         let sat_cur = oklab[1] * r(angle);
@@ -194,6 +233,7 @@ impl ColorSettings {
              4.0767416621f32 * l - 3.3077115913f32 * m + 0.2309699292f32 * s,
             -1.2684380046f32 * l + 2.6097574011f32 * m - 0.3413193965f32 * s,
             -0.0041960863f32 * l - 0.7034186147f32 * m + 1.7076147010f32 * s,
+            oklab[3],
         ]
     }
 
@@ -205,12 +245,17 @@ pub struct Lut4ColorSettings {
     pub data : Vec<u8>, // RGBA adatok
     pub sharpen_amount: f32, // -1.0 .. 5.0 // realy image setting
     pub sharpen_radius: f32, // 0.2 .. 3.0 // realy image setting
+    pub transparent_color: [u8; 4],
+    pub transparency_tolerance: f32, // 0.0 - 1.0
+    pub use_transparency: bool,
+    pub rough_transparency: bool,
 }
 
 impl Lut4ColorSettings {
     pub fn new() -> Self {
         let size = 33;
-        let mut data = Vec::with_capacity(size * size * size * 4);
+        let mut data = vec![0u8; size * size * size * 4];
+        let mut idx = 0;
         for b in 0..size {
             for g in 0..size {
                 for r in 0..size {
@@ -218,45 +263,84 @@ impl Lut4ColorSettings {
                     let g_f = g as f32 / (size - 1) as f32;
                     let b_f = b as f32 / (size - 1) as f32;
                     let color = [r_f, g_f, b_f];
-                    data.push((color[0] * 255.0) as u8);
-                    data.push((color[1] * 255.0) as u8);
-                    data.push((color[2] * 255.0) as u8);
-                    data.push(255); // Alpha
+                    data[idx] = (color[0] * 255.0) as u8; idx +=1;
+                    data[idx] = (color[1] * 255.0) as u8; idx +=1;
+                    data[idx] = (color[2] * 255.0) as u8; idx +=1;
+                    data[idx] = 255u8; idx +=1;
                 }
             }
         }
-        Self { size:size, data:data, sharpen_amount:0.0,sharpen_radius:0.0, }
+        Self {
+            size:size,
+            data:data,
+            sharpen_amount:0.0,
+            sharpen_radius:0.0,
+            transparent_color: [255, 255, 255, 0],
+            transparency_tolerance: 0.0, // 0.0 - 1.0
+            use_transparency: false,
+            rough_transparency: false,
+            }
     }
     
     pub fn default() -> Lut4ColorSettings {
-        let mut s = Lut4ColorSettings::new();
-        s.update_lut(&ColorSettings::default());
+        let s = Lut4ColorSettings::new();
         s
     }
 
     pub fn update_lut(&mut self, colset: &ColorSettings) {
         let mut idx = 0;
-        colset.is_setted();
         for b in 0..self.size {
             for g in 0..self.size {
                 for r in 0..self.size {
                     let r_f = r as f32 / (self.size - 1) as f32;
                     let g_f = g as f32 / (self.size - 1) as f32;
                     let b_f = b as f32 / (self.size - 1) as f32;
-                    let mut color = [r_f, g_f, b_f];
+                    let mut color = [r_f, g_f, b_f, 1.0];
                     colset.convert(&mut color);
                     self.data[idx  ] = (color[0] * 255.0) as u8;
                     self.data[idx+1] = (color[1] * 255.0) as u8;
                     self.data[idx+2] = (color[2] * 255.0) as u8;
-                    self.data[idx+3] = 255; // Alpha unused
+                    self.data[idx+3] = 255;
                     idx += 4;
                 }
             }
         }
         self.sharpen_amount = colset.sharpen_amount;
         self.sharpen_radius = colset.sharpen_radius;
+        self.transparent_color = colset.transparent_color;
+        self.transparency_tolerance = colset.transparency_tolerance;
+        self.use_transparency = colset.use_transparency;
     }
-    
+
+    pub fn color_to_alpha(&self,  pixel: & mut image::Rgba<u8> ) {
+        let max_dist = self.transparency_tolerance * 441.0;
+        let dist = ((pixel[0] as f32 - self.transparent_color[0] as f32).powi(2) +
+                   (pixel[1] as f32 - self.transparent_color[1] as f32).powi(2) +
+                   (pixel[2] as f32 - self.transparent_color[2] as f32).powi(2)).sqrt();
+        if dist < max_dist {
+            if self.transparency_tolerance < 0.001 {
+                pixel[3] = 0;
+            }
+            else {
+                let alpha = dist / max_dist; 
+                if self.rough_transparency {
+                    if alpha < 0.5 {
+                        pixel[0] = self.transparent_color[0];
+                        pixel[1] = self.transparent_color[1];
+                        pixel[2] = self.transparent_color[2];
+                        pixel[3] = self.transparent_color[3];
+                    }
+                    else {
+                        pixel[3] = if pixel[3] < 128 { 0u8 } else { 255u8 };
+                    }
+                }
+                else {
+                    pixel[3] = (pixel[3] as f32 * alpha).clamp(0.0, 255.0) as u8;
+                }
+            }
+        }
+    }
+
     pub fn apply_lut_pixel(&self, _x: u32, _y: u32, pix: & mut image::Rgba<u8>) {
         
         let parts = 256 / (self.size-1); // 8
@@ -310,6 +394,9 @@ impl Lut4ColorSettings {
                     self.data[idx101+2]as usize * (red_a*gre_b*blu_a) +
                     self.data[idx110+2]as usize * (red_a*gre_a*blu_b) +
                     self.data[idx111+2]as usize * (red_a*gre_a*blu_a) + div/2) / div) as u8;
+        if self.use_transparency {
+            self.color_to_alpha( pix );
+        }
     }
     
     //////////////////////////////
@@ -398,38 +485,5 @@ impl Lut4ColorSettings {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////
-
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub enum Rotate {
-    Rotate0,
-    Rotate90,
-    Rotate180,
-    Rotate270,
-}
-impl Rotate {
-    pub fn to_u8(self) -> u8 {
-        match self {
-            Rotate::Rotate0 => 0,
-            Rotate::Rotate90 => 1,
-            Rotate::Rotate180 => 2,
-            Rotate::Rotate270 => 3,
-        }
-    }
-
-    pub fn from_u8(v: u8) -> Self {
-        match v % 4 {
-            0 => Rotate::Rotate0,
-            1 => Rotate::Rotate90,
-            2 => Rotate::Rotate180,
-            3 => Rotate::Rotate270,
-            _ => Rotate::Rotate0,
-        }
-    }
-
-    pub fn add(self, other: Rotate) -> Rotate {
-        Rotate::from_u8(self.to_u8() + other.to_u8())
-    }
-}
 ///////////////////////////////////////////////////////////////////////////
 

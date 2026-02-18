@@ -31,6 +31,11 @@ pub struct GpuFilterSettings {
     pub sharpen_amount: f32,
     pub image_width: f32,
     pub image_height: f32,
+    pub transparency_tolerance: f32,
+    pub use_transparency: u32,
+    pub rough_transparency: u32, // for gif
+    pub _padding: u32, // 16 bájtos igazítás
+    pub transparent_color: [f32; 4],
 }
 
 #[repr(C)]
@@ -82,7 +87,7 @@ impl GpuInterface {
         queue.write_texture(
             tex_identity.as_image_copy(),
             &identity_data,
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(33 * 4), rows_per_image: Some(33) },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(33 * 4), rows_per_image: Some(33) },
             lut_desc.size,
         );
 
@@ -228,8 +233,8 @@ impl GpuInterface {
         // Pipeline-ok és BindGroup-ok létrehozása...
         // (Ha bármi hibázik, return None)
         Some(Self {
-            device,
-            queue,
+            device: device.into(),
+            queue: queue.into(),
             pipe_gen_lut,
             pipe_apply,
             tex_identity,
@@ -268,6 +273,16 @@ impl GpuInterface {
             sharpen_amount: colset.sharpen_amount,
             image_width: width,
             image_height: height,
+            transparency_tolerance: colset.transparency_tolerance,
+            use_transparency: if colset.use_transparency { 1 } else { 0 },
+            rough_transparency: if colset.rough_transparency { 1 } else { 0 },
+            _padding: 0,
+            transparent_color: [
+                colset.transparent_color[0] as f32 / 255.0,
+                colset.transparent_color[1] as f32 / 255.0,
+                colset.transparent_color[2] as f32 / 255.0,
+                0.0,
+            ],
         };
         self.queue.write_buffer(&self.filter_params_buffer, 0, bytemuck::bytes_of(&gpu_filter));
 
@@ -311,7 +326,7 @@ impl GpuInterface {
         self.queue.write_texture(
             tex_src.as_image_copy(),
             img_data,
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * width), rows_per_image: Some(height) },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * width), rows_per_image: Some(height) },
             size,
         );
 
@@ -370,9 +385,9 @@ impl GpuInterface {
 
         encoder.copy_texture_to_buffer(
             tex_out.as_image_copy(),
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &staging_buffer,
-                layout: wgpu::ImageDataLayout { 
+                layout: wgpu::TexelCopyBufferLayout  { 
                     offset: 0, 
                     bytes_per_row: Some(padded_bytes_per_row), // ITT A JAVÍTÁS
                     rows_per_image: Some(height) },
@@ -387,7 +402,7 @@ impl GpuInterface {
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
-        self.device.poll(wgpu::Maintain::Wait);
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
 
         if let Ok(Ok(())) = receiver.recv() {
             let data = buffer_slice.get_mapped_range();
