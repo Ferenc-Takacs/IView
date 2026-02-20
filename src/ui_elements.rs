@@ -79,17 +79,11 @@ impl ImageViewer {
                 }
                 self.gpu_tried_init = true;
             }
-            //else {
+            else {
                 //println!("frame.wgpu_render_state() is None");
-            //}
+                self.gpu_tried_init = true;
+            }
         }
-
-        /*if let Some(_tex) = &self.texture {
-        }
-        else { // start without image
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            return;
-        } */
 
         if self.anim_playing {
             if let Some(anim) = &self.anim_data {

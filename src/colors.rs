@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 const TWO_PI: f32 = PI * 2.0;
 
@@ -341,7 +342,7 @@ impl Lut4ColorSettings {
         }
     }
 
-    pub fn apply_lut_pixel(&self, _x: u32, _y: u32, pix: & mut image::Rgba<u8>) {
+    pub fn apply_lut_pixel(&self, _x: u32, _y: u32, pix: & mut image::Rgba<u8> ) {
         
         let parts = 256 / (self.size-1); // 8
         
@@ -467,22 +468,36 @@ impl Lut4ColorSettings {
     
     //////////////////////////////
     
-    pub fn apply_lut(&self, img: &mut image::RgbaImage) {
+    pub fn apply_lut(&self, img: &mut image::RgbaImage, hist: &[AtomicU32]) {
+        hist.iter().for_each(|m| m.store(0, Ordering::Relaxed));
         let r = (self.sharpen_radius*3.0+1.0) as i32 + 1;
+        
         if r > 0 && self.sharpen_radius >= 0.2 && self.sharpen_amount != 0.0 {
             let weights = self.calculate_weights(r);
             let source_img = img.clone(); // Olvasható másolat a szomszédokhoz
             img.enumerate_pixels_mut().par_bridge().for_each(|(x, y, pixel)| {
                 self.blur_pixel(x, y, pixel, &source_img, &weights, r);
                 self.apply_lut_pixel(x, y, pixel);
+                self.update_histogram(pixel, hist);
             });
         } else {
             // Ha nincs blur, csak a színkorrekció fut
             img.enumerate_pixels_mut().for_each(|(x, y, pixel)| {
                 self.apply_lut_pixel(x, y, pixel);
+                self.update_histogram(pixel, hist);
             });
         }
     }
+    
+    fn update_histogram(&self, pixel: &image::Rgba<u8>, hist: &[AtomicU32]) {
+        // R: 0-255, G: 256-511, B: 512-767, Gray: 768-1023
+        hist[pixel[0] as usize].fetch_add(1, Ordering::Relaxed);
+        hist[256 + pixel[1] as usize].fetch_add(1, Ordering::Relaxed);
+        hist[512 + pixel[2] as usize].fetch_add(1, Ordering::Relaxed);
+        let gray = (pixel[0] as f32 * 0.299 + pixel[1] as f32 * 0.587 + pixel[2] as f32 * 0.114) as usize;
+        hist[768 + gray.clamp(0, 255)].fetch_add(1, Ordering::Relaxed);
+    }
+    
 }
 
 ///////////////////////////////////////////////////////////////////////////

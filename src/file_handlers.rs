@@ -8,6 +8,7 @@ use image::AnimationDecoder;
 use std::io::{Read, Seek};
 use img_parts::ImageEXIF;
 use rayon::iter::{IntoParallelRefIterator,ParallelIterator};
+use std::sync::atomic::AtomicU32;
 
 use crate::exif_my::*;
 use crate::colors::*;
@@ -122,12 +123,14 @@ fn apply_modifies_to_frame(img: &mut image::DynamicImage, color_settings: &Color
     if color_settings.is_setted() || color_settings.is_blured(){
         if let Some(interface) = &gpu_interface {
             let (w, h) = rgba_image.dimensions();
+            let mut hist = vec![0u32; 1024];
             interface.change_colorcorrection( &color_settings, w as f32, h as f32);
-            interface.generate_image(rgba_image.as_mut(), w, h);
+            interface.generate_image(rgba_image.as_mut(), w, h, &mut hist);
         }
         else {
             if let Some(lut) = &lut {
-                lut.apply_lut(&mut rgba_image);
+                let mut hist = (0..1024).map(|_| AtomicU32::new(0)).collect::<Vec<_>>();
+                lut.apply_lut(&mut rgba_image, &mut hist);
             }
         }
     }

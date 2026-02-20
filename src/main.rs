@@ -3,11 +3,6 @@ iview/src/main.rs
 
 Created by Ferenc Takács in 2026
 
-TODO
-    saving gif, és webp animations
-    saving resolution
-    modularize
-
 */
 
 // disable terminal window beyond graphic window in release version
@@ -30,18 +25,24 @@ use crate::image_processing::*;
 use crate::file_handlers::*;
 use crate::exif_my::*;
 use crate::pf32::Pf32;
-//use arboard::Clipboard;
 use eframe::egui;
-//use image::AnimationDecoder;
-//use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-//use std::io::{Read, Seek};
 use std::path::PathBuf;
-//use std::time::SystemTime;
-//use webp::Encoder;
+use pollster;
 
 fn main() -> eframe::Result<()> {
+    
+    let has_wgpu = pollster::block_on(check_wgpu_support());
+    
+    let renderer = if has_wgpu {
+        println!("WGPU támogatott, Shader mód bekapcsolva.");
+        eframe::Renderer::Wgpu
+    } else {
+        println!("WGPU nem elérhető. Váltás GLOW (OpenGL) módra - CPU fallback.");
+        eframe::Renderer::Glow
+    };
+    
     let args: Vec<String> = env::args().collect();
     let (start_image, clipboard) = if args.len() > 1 {
         // Ha van argumentum, azt útvonalként kezeljük
@@ -56,16 +57,20 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_icon(icon) // Itt állítjuk be az ikont
             .with_inner_size([800.0, 600.0]),
-        renderer: eframe::Renderer::Wgpu,
+        renderer: renderer,
         ..Default::default()
     };
-
+    
+    
     eframe::run_native(
         "IView",
         options,
         Box::new(|cc| {
             let mut app = ImageViewer::default();
             app.load_settings();
+            
+            app.has_gpu = has_wgpu;
+            if !has_wgpu { app.use_gpu = false; }
             
             if let Some(path) = start_image {
                 if clipboard {
@@ -79,6 +84,31 @@ fn main() -> eframe::Result<()> {
             Ok(Box::new(app))
         }),
     )
+}
+
+async fn check_wgpu_support() -> bool {
+    let instance = wgpu::Instance::default();
+    // Megpróbálunk egy adaptert kérni (High Performance)
+    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface: None,
+    }).await;
+
+    // Ha van adapter, és támogatja a shadereinket (pl. BC compression vagy float filtering)
+    if let Some(a) = adapter {
+        let info = a.get_info();
+        let name = info.name.to_lowercase();
+        if name.contains("mesa") || name.contains("svga3d") || name.contains("llvmpipe") {
+            //println!("Virtualizált GPU detektálva ({}), biztonsági okokból Glow módra váltunk.", info.name);
+            return false; 
+        }
+        //let limits = a.limits();
+        //println!("GPU találva: {}, Max Texture: {}", a.get_info().name, limits.max_texture_dimension_2d);
+        true
+    } else {
+        false
+    }
 }
 
 struct ImageViewer {
@@ -105,7 +135,6 @@ struct ImageViewer {
     pub aktualis_offset: Pf32,    // megjelenítés kezdőpozíció a nagyított képen
     pub sort: SortDir,
     pub color_settings: ColorSettings,
-    pub settings_dirty: bool, // Jelzi, ha újra kell számolni a LUT-ot
     pub lut: Option<Lut4ColorSettings>,
     pub refit_reopen: bool,
     pub fit_open: bool,
@@ -130,6 +159,7 @@ struct ImageViewer {
     pub gpu_interface : Option<gpu_colors::GpuInterface>,
     pub gpu_tried_init: bool,
     pub use_gpu: bool,
+    pub has_gpu: bool,
     pub modified: bool,
     pub save_dialog: Option<SaveSettings>,
     pub color_correction_dialog: bool,
@@ -140,6 +170,8 @@ struct ImageViewer {
     pub color_correction_dialog_focus: bool,
     pub show_info_focus: bool,
     pub show_about_window_focus: bool,
+    pub hist: Vec<u32>,
+    pub modifiers: egui::Modifiers,
 }
 
 
@@ -171,7 +203,6 @@ impl Default for ImageViewer {
             sort: SortDir::Name,
             color_settings: ColorSettings::default(),
             //image_processor: None,
-            settings_dirty: false,
             lut: None,
             refit_reopen: false,
             fit_open: true,
@@ -196,6 +227,7 @@ impl Default for ImageViewer {
             gpu_interface : None,
             gpu_tried_init: false,
             use_gpu: true,
+            has_gpu: true,
             modified: false,
             save_dialog: None,
             color_correction_dialog: false,
@@ -206,6 +238,8 @@ impl Default for ImageViewer {
             color_correction_dialog_focus: false,
             show_info_focus: false,
             show_about_window_focus: false,
+            hist: Vec::new(),
+            modifiers:  egui::Modifiers::NONE,
         }
     }
 }

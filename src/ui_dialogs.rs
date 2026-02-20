@@ -309,7 +309,7 @@ impl ImageViewer {
                 egui::ViewportId::from_hash_of("colorcorrection_viewport"),
                 egui::ViewportBuilder::default()
                 .with_title("Color Correction for iView")
-                .with_inner_size([440.0, 350.0])
+                .with_inner_size([440.0, if self.hist.len() != 1024 { 350.0 } else { 500.0 }])
                 .with_resizable(false)
                 .with_maximize_button(false)
                 .with_always_on_top(),
@@ -532,7 +532,108 @@ impl ImageViewer {
                     });
                 });
 
-                
+                if self.hist.len() == 1024 {
+                let max_val = self.hist.iter().cloned().max().unwrap_or(1) as f32;
+                if max_val >= 1.0 {// Üres hisztogram védelem
+                ui.group(|ui| {
+                    ui.label("Histogram");
+                    // 1. Lefoglalunk egy fix területet (pl. 120px magas)
+                    let (rect, _response) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), 120.0), 
+                        egui::Sense::hover()
+                    );
+                    let painter = ui.painter_at(rect);
+                    // Sötét háttér
+                    painter.rect_filled(rect, 2.0, egui::Color32::DARK_GRAY);
+
+                    let width = rect.width();
+                    let height = rect.height();
+                    let bin_w = width / 256.0;
+
+                    // 3. Rétegek kirajzolása (R, G, B és opcionálisan Gray)
+                    // Segédfüggvény a görbe megrajzolásához
+                    let draw_channel = |offset: usize, color: egui::Color32| {
+                        let fill_color = color.linear_multiply(0.4);
+                        let stroke = egui::Stroke::new(1.0, color);
+                        let mut mesh = egui::Mesh::default();
+                        // Előkészítjük a pontokat: 256 felső pont a görbén, 256 alsó pont a tengelyen
+                        for i in 0..256 {
+                            let val = self.hist[offset + i] as f32;
+                            let h = (val / max_val) * height;
+                            let x = rect.min.x + i as f32 * bin_w;
+                            // Felső pont (görbe)
+                            let top_y = rect.max.y - h;
+                            mesh.vertices.push(egui::epaint::Vertex {
+                                pos: egui::pos2(x, top_y),
+                                uv: egui::epaint::WHITE_UV,
+                                color: fill_color,
+                            });
+                            // Alsó pont (tengely)
+                            mesh.vertices.push(egui::epaint::Vertex {
+                                pos: egui::pos2(x, rect.max.y),
+                                uv: egui::epaint::WHITE_UV,
+                                color: fill_color,
+                            });
+                            // Háromszögek indexelése (minden bin-hez 2 háromszög)
+                            if i > 0 {
+                                let curr = (i * 2) as u32;
+                                let prev = ((i - 1) * 2) as u32;
+                                // Első háromszög
+                                mesh.indices.extend_from_slice(&[prev, curr, prev + 1]);
+                                // Második háromszög
+                                mesh.indices.extend_from_slice(&[curr, prev + 1, curr + 1]);
+                            }
+                        }
+                        // 1. Kitöltés rajzolása a Mesh-el
+                        painter.add(egui::Shape::mesh(mesh));
+                        // 2. Kontúrvonal rajzolása (hogy éles legyen a teteje)
+                        let points: Vec<egui::Pos2> = (0..256).map(|i| {
+                            let val = self.hist[offset + i] as f32;
+                            let h = (val / max_val) * height;
+                            egui::pos2(rect.min.x + i as f32 * bin_w, rect.max.y - h)
+                        }).collect();
+                        painter.add(egui::Shape::line(points, stroke));
+                    };
+
+                    // Sorrend: Gray a legalul, aztán B, G, R
+                    // Vagy ha van checkboxod, csak azt rajzold, amit kell
+                    draw_channel(768, egui::Color32::GRAY);    // Gray
+                    draw_channel(512, egui::Color32::BLUE);    // Blue
+                    draw_channel(256, egui::Color32::GREEN);   // Green
+                    draw_channel(0,   egui::Color32::RED);     // Red
+
+                    if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                        if rect.contains(pos) {
+                            let bin = ((pos.x - rect.min.x) / bin_w) as usize;
+                            let bin = bin.clamp(0, 255);                            
+                            #[allow(deprecated)]
+                            egui::show_tooltip(ui.ctx(), ui.layer_id(), egui::Id::new("hist_tooltip"), |ui: &mut egui::Ui| {
+                                ui.set_width(65.0);
+                                ui.label(format!("Level: {}", bin));
+                                ui.colored_label(egui::Color32::RED,   format!("R:{}", self.hist[bin]));
+                                ui.colored_label(egui::Color32::GREEN, format!("G:{}", self.hist[256 + bin]));
+                                ui.colored_label(egui::Color32::BLUE,  format!("B:{}", self.hist[512 + bin]));
+                                ui.colored_label(egui::Color32::DARK_GRAY,  format!("Gray:{}", self.hist[768 + bin]));
+                            });
+                            
+                            // VAGY a teljesen új Tooltip API-val:
+                            /*
+                            egui::Tooltip::lock(ui.ctx(), egui::Id::new("hist_tooltip"), pos).show(ui.ctx(), |ui| {
+                                ui.label(format!("Level: {}", bin));
+                                // ... stb
+                            });
+                            */
+
+                            // Függőleges vonal rajzolása az egérnél
+                            painter.line_segment(
+                                [egui::pos2(pos.x, rect.min.y), egui::pos2(pos.x, rect.max.y)],
+                                egui::Stroke::new(1.0, egui::Color32::WHITE.linear_multiply(0.5))
+                            );
+                        }
+                    }
+                });
+                }
+                }
 
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
@@ -560,7 +661,6 @@ impl ImageViewer {
             });
             });
             if changed {
-                self.settings_dirty = true;
                 self.review(ctx, true, false);
             }
         }

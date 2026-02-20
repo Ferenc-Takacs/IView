@@ -7,7 +7,7 @@
 
 ## 🇺🇸 English Description
 
-**IView** is a versatile image viewer application designed to provide efficient image management and basic editing tools, leveraging the performance and safety of the Rust ecosystem.
+**IView** is a versatile image viewer application designed to provide efficient image management and basic editing tools, leveraging the performance and safety of the Rust ecosystem.  It takes advantage of the computing power of the graphics card, or uses the CPU on virtual machines that do not provide it.
 
 ![IView preview](screenshots/preview.png)
 
@@ -32,6 +32,7 @@
     *   Display detailed image metadata and technical information.
     *   **Geolocation:** View stored location data directly in Google Maps.
     *   **Animation** Read, and show Webp and Gif animations.
+    *   **Histogram** Show the frequency of occurrence of each color.
     *   **PickPixel** Info about the position and color of a given point in the image.
     *   **GPU Optimization:** Automatic resizing of oversized panoramic images to the hardware-standard maximum of 16384 x 16384 pixels for stable GPU rendering.
     *   **Export with Adjustments:** Use "Save View" or "Copy View" to export the image exactly as seen on screen, including zoom levels, rotations, and color adjustments.
@@ -64,7 +65,7 @@
     *   **Change:** It places the original image on the clipboard while importing the image there into the program.
     *   **Change View:** It places the modified image on the clipboard while importing the image that is there. This allows you to repeat the modifications.
     *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
-    *   **Restriction:** The program does not display images on a system installed in VirtualBox due to current limitations on GPU usage.T he Ctrl + c,v,x functions work when the button is released due to a limitation of the egui system.
+    *   **Restriction:** The Ctrl + c,v,x functions work when the button is released due to a limitation of the egui system.
     *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
 
 ---
@@ -93,6 +94,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Részletes képinformációk és metaadatok megjelenítése.
     *   **Geolokáció:** Tárolt GPS koordináták megnyitása közvetlenül a Google Maps alkalmazásban.
     *   **Animáció** A Webp and Gif animációk olvasása, lejátszása, írása képként vagy egészben.
+    *   **Hisztogram** Az egyes színek előfordulási gyakoriságának megjelenítése.
     *   **PickPixel** Info a kép adott pontja pozíciójáról, és színéről.
     *   **GPU Optimalizálás:** A túl nagy panorámaképek automatikus átméretezése a grafikus processzorok (GPU) által megkövetelt maximum 16384 x 16384 képpontos méretre. A Ctrl + c,v,x funkciók a gomb elengedésre működnek az egui rendszer korlátozása miatt.
     *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
@@ -127,7 +129,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Change:** Az eredeti képet a vágólapra teszi, miközben az ott levő képet hozza be programba.
     *   **Change View:** A módosított képet a vágólapra teszi, miközben az ott levő képet hozza be. Ez a módosítások ismétlését teszi lehetővé.
     *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif. Animált képeknél jelenleg az első képet olvassa.
-    *   **Korlátozás:** A program a GPU használat jelenlegi korlátozásai miatt nem jelenít meg képet VirtualBox-ban installált rendszerben. A Ctrl + c,v,x függvények a gomb elengedésekor működnek az egui rendszer korlátai miatt.
+    *   **Korlátozás:** A Ctrl + c,v,x függvények a gomb elengedésekor működnek az egui rendszer korlátai miatt.
     *   **GPS adatok:** Ha a kép tartalmaz geolokációs metaadatokat, az Info panelen megjelenik egy gomb, amellyel a helyszín közvetlenül megnyitható a Google Maps-en.
 
 ---
@@ -174,7 +176,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
 *   **Executables:** in the executables folder
-*   **Latest Version:** 0.6.0 
+*   **Latest Version:** 0.7.0 
 
 ### 🚀 Development / Fejlesztés
 

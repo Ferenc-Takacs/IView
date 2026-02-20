@@ -26,16 +26,16 @@ pub struct GpuColorSettings {
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct GpuFilterSettings {
+pub struct GpuSharpenSettings {
     pub sharpen_radius: f32,
     pub sharpen_amount: f32,
     pub image_width: f32,
     pub image_height: f32,
+    pub transparent_color: [f32; 4],
     pub transparency_tolerance: f32,
     pub use_transparency: u32,
     pub rough_transparency: u32, // for gif
     pub _padding: u32, // 16 bájtos igazítás
-    pub transparent_color: [f32; 4],
 }
 
 #[repr(C)]
@@ -46,8 +46,10 @@ pub struct GpuInterface {
     pipe_apply: wgpu::ComputePipeline,
     tex_identity: wgpu::Texture,
     pub tex_processed_lut: wgpu::Texture,
-    params_buffer: wgpu::Buffer,
-    filter_params_buffer: wgpu::Buffer,
+    color_params_buffer: wgpu::Buffer,
+    sharpen_params_buffer: wgpu::Buffer,
+    hist_buffer: wgpu::Buffer,
+    hist_staging_buffer: wgpu::Buffer,
     sampler: wgpu::Sampler,
     bind_group_gen: wgpu::BindGroup,
     bind_group_apply_0: wgpu::BindGroup,
@@ -105,28 +107,26 @@ impl GpuInterface {
         });
 
         // 2. Uniform Buffer létrehozása a ColorSettings számára
-        let params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Params Buffer"),
+        let color_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Color Params Buffer"),
             size: std::mem::size_of::<GpuColorSettings>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let filter_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Filter Params Buffer"),
-            size: std::mem::size_of::<GpuFilterSettings>() as u64, // GpuFilterSettings a main.rs-ből vagy itt definiálva
+        let sharpen_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Sharpen Params Buffer"),
+            size: std::mem::size_of::<GpuSharpenSettings>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
 
-        // gpu_colors.rs -> gpu_init()
-
         // --- 0. CSOPORT LAYOUT (Közös a LUT-hoz és a Képhez) ---
         let bg_layout_gen = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Layout Group 0"),
             entries: &[
-                wgpu::BindGroupLayoutEntry { // params_buffer
+                wgpu::BindGroupLayoutEntry { // color_params_buffer
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
@@ -170,8 +170,7 @@ impl GpuInterface {
                 wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Float { filterable: true }, view_dimension: wgpu::TextureViewDimension::D3, multisampled: false }, count: None },
                 wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
                 wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::StorageTexture { access: wgpu::StorageTextureAccess::WriteOnly, format: wgpu::TextureFormat::Rgba8Unorm, view_dimension: wgpu::TextureViewDimension::D2 }, count: None },
-                // EZ HIÁNYZOTT: A colset_apply binding (5-ös)
-                wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+                wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage{read_only: false}, has_dynamic_offset: false, min_binding_size: None }, count: None },
             ],
         });
 
@@ -214,7 +213,7 @@ impl GpuInterface {
             label: Some("Bind Group Gen"),
             layout: &bg_layout_gen,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: params_buffer.as_entire_binding(), },
+                wgpu::BindGroupEntry { binding: 0, resource: color_params_buffer.as_entire_binding(), },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_identity.create_view(&wgpu::TextureViewDescriptor::default()) ), },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&tex_processed_lut.create_view(&wgpu::TextureViewDescriptor::default()) ), },
             ],
@@ -224,11 +223,26 @@ impl GpuInterface {
             label: Some("Bind Group Apply 0 (Truly Params Only)"),
             layout: &bg_layout_apply_params, // Az új, szűkített layout
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: params_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 0, resource: color_params_buffer.as_entire_binding() },
             ],
         });
 
         let bg_layout_apply = pipe_apply.get_bind_group_layout(1);
+
+        let hist_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Histogram Storage"),
+            size: 256 * 4 * 4, // 256 u32 4
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let hist_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Histogram Staging"),
+            size: 256 * 4 * 4,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
 
         // Pipeline-ok és BindGroup-ok létrehozása...
         // (Ha bármi hibázik, return None)
@@ -239,8 +253,10 @@ impl GpuInterface {
             pipe_apply,
             tex_identity,
             tex_processed_lut,
-            params_buffer,
-            filter_params_buffer,
+            color_params_buffer,
+            sharpen_params_buffer,
+            hist_buffer,
+            hist_staging_buffer,
             sampler,
             bind_group_gen, // Ezt is hozzá kell adni a struct-hoz!
             bind_group_apply_0,
@@ -266,25 +282,25 @@ impl GpuInterface {
             oklab: if colset.oklab { 1 } else { 0 },
             _padding: 0,
         };
-        self.queue.write_buffer(&self.params_buffer, 0, bytemuck::bytes_of(&gpu_settings));
+        self.queue.write_buffer(&self.color_params_buffer, 0, bytemuck::bytes_of(&gpu_settings));
 
-        let gpu_filter = GpuFilterSettings {
+        let gpu_filter = GpuSharpenSettings {
             sharpen_radius: colset.sharpen_radius,
             sharpen_amount: colset.sharpen_amount,
             image_width: width,
             image_height: height,
-            transparency_tolerance: colset.transparency_tolerance,
-            use_transparency: if colset.use_transparency { 1 } else { 0 },
-            rough_transparency: if colset.rough_transparency { 1 } else { 0 },
-            _padding: 0,
             transparent_color: [
                 colset.transparent_color[0] as f32 / 255.0,
                 colset.transparent_color[1] as f32 / 255.0,
                 colset.transparent_color[2] as f32 / 255.0,
                 0.0,
             ],
+            transparency_tolerance: colset.transparency_tolerance,
+            use_transparency: if colset.use_transparency { 1 } else { 0 },
+            rough_transparency: if colset.rough_transparency { 1 } else { 0 },
+            _padding: 0,
         };
-        self.queue.write_buffer(&self.filter_params_buffer, 0, bytemuck::bytes_of(&gpu_filter));
+        self.queue.write_buffer(&self.sharpen_params_buffer, 0, bytemuck::bytes_of(&gpu_filter));
 
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("LUT Gen Encoder"),
@@ -307,7 +323,7 @@ impl GpuInterface {
     }
     ///////////////////////////////////////////////////////////////////////////
 
-    pub fn generate_image(&self, img_data: &mut [u8], width: u32, height: u32) {
+    pub fn generate_image(&self, img_data: &mut [u8], width: u32, height: u32, hist : &mut Vec<u32>) {
 
         let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 
@@ -350,13 +366,15 @@ impl GpuInterface {
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&tex_src.create_view(&Default::default())) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&self.tex_processed_lut.create_view(&Default::default())) },
-                wgpu::BindGroupEntry { binding: 3, resource: self.filter_params_buffer.as_entire_binding() }, // Feltételezve, hogy van ilyen buffer az initben
+                wgpu::BindGroupEntry { binding: 3, resource: self.sharpen_params_buffer.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&tex_out.create_view(&Default::default())) },
-                wgpu::BindGroupEntry { binding: 5, resource: self.params_buffer.as_entire_binding() }, 
+                wgpu::BindGroupEntry { binding: 5, resource: self.hist_buffer.as_entire_binding() }, 
             ],
         });
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
+        encoder.clear_buffer(&self.hist_buffer, 0, None);
+
         {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
             cpass.set_pipeline(&self.pipe_apply);
@@ -371,6 +389,7 @@ impl GpuInterface {
             let workgroup_y = (height + 15) / 16;
             cpass.dispatch_workgroups(workgroup_x, workgroup_y, 1);
         }
+        
 
         let width_bytes = 4 * width;
         let alignment = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT; // Ez a konstans 256
@@ -395,7 +414,23 @@ impl GpuInterface {
             size,
         );
 
+        encoder.copy_buffer_to_buffer(&self.hist_buffer, 0, &self.hist_staging_buffer, 0, 256 * 4 * 4);
+
         self.queue.submit(Some(encoder.finish()));
+        
+        let hist_buffer_slice = self.hist_staging_buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        hist_buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+        
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+
+        if let Ok(Ok(())) = receiver.try_recv() {
+            let data = hist_buffer_slice.get_mapped_range();
+            let result: &[u32] = bytemuck::cast_slice(&data);
+            hist.copy_from_slice(result);
+            drop(data);
+            self.hist_staging_buffer.unmap();
+        }
 
         // 6. Letöltés a CPU-ra
         let buffer_slice = staging_buffer.slice(..);

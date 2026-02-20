@@ -1,10 +1,23 @@
 use crate::colors::*;
 use crate::ImageViewer;
- 
+
 impl ImageViewer {
 
     pub fn handle_shortcuts(&mut self, ctx: &egui::Context){
 
+        let modifiers = ctx.input(|i| i.modifiers);
+        if modifiers != self.modifiers {
+            if modifiers.alt && modifiers.shift && !self.show_original_only && (!self.modifiers.alt || !self.modifiers.shift) {
+                self.show_original_only = true;
+                self.review(ctx, true, false);
+            }
+            if self.modifiers.alt && self.modifiers.shift && self.show_original_only && (!modifiers.alt || !modifiers.shift) {
+                self.show_original_only = false;
+                self.review(ctx, true, false);
+            }
+            self.modifiers = modifiers;
+        }
+        
        // Gyorsbillentyűk figyelése
        // release section
         if ctx.input(|i| i.key_released(egui::Key::C) && i.modifiers.command && i.modifiers.shift ) {
@@ -33,7 +46,6 @@ impl ImageViewer {
             self.save_original = true;
             self.change_with_clipboard(ctx);
         }
-
 
         if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(

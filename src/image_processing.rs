@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::env;
 use crate::ImageViewer;
 use crate::colors::*;
-
-
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
 // Segédfüggvény a vágólapon lévő kép kimentéséhez egy ideiglenes fájlba
 pub fn save_clipboard_image() -> Option<PathBuf> {
@@ -201,12 +201,15 @@ impl ImageViewer {
                 let w_orig = image.width();
                 let h_orig = image.height();
                 self.original_image_size = (w_orig,h_orig).into();
-                let max_gpu_size = ctx.input(|i| i.max_texture_side) as u32;
-                if w_orig > max_gpu_size || h_orig > max_gpu_size {
-                    let magn = (w_orig as f64 / max_gpu_size as f64 ).max(h_orig as f64 / max_gpu_size as f64 ).ceil();
-                    *img = image.thumbnail((w_orig as f64/magn) as u32, (h_orig as f64/magn) as u32);
-                    //*img = image.resize( max_gpu_size, max_gpu_size, image::imageops::FilterType::Triangle, );
+                let max_side = ctx.input(|i| i.max_texture_side) as u32;
+                if w_orig > max_side || h_orig > max_side  {
+                    let magn = (w_orig as f32 / max_side as f32 ).max( h_orig as f32 / max_side as f32 ).ceil();
+                    let w_new = (w_orig as f32/magn).ceil();
+                    let h_new = (h_orig as f32/magn).ceil();
+                     *img = image.thumbnail(w_new as u32, h_new as u32);
+                    //*img = image.resize( w_new, h_new, image::imageops::FilterType::Triangle, );
                     self.resize =  w_orig as f32 / img.width() as f32;
+                    //println!("resize:{}",self.resize);
                     self.resized_image = Some(img.clone());
                 }
                 else {
@@ -239,13 +242,22 @@ impl ImageViewer {
                 self.image_size.y);
         }
 
-        if self.color_settings.is_setted() || self.color_settings.is_blured() {
+        if self.modified {
             if self.gpu_interface.is_some() {
-                self.gpu_interface.as_ref().unwrap().generate_image(rgba_image.as_mut(), width, height);
+                //self.hist = vec![0u32; 1024];
+                self.gpu_interface.as_ref().unwrap().generate_image(rgba_image.as_mut(), width, height, & mut self.hist);
+                //println!("a");
             }
             else if let Some(lut) = &self.lut {
-                lut.apply_lut(&mut rgba_image); 
+                let mut hist = (0..1024).map(|_| AtomicU32::new(0)).collect::<Vec<_>>();
+                lut.apply_lut(&mut rgba_image, &mut hist ); 
+                self.hist = hist.iter().map(|a| a.load(Ordering::Relaxed)).collect();
+                //println!("b");
             }
+        }
+        else {
+            self.calculate_histogram_only(&rgba_image);
+            //println!("c");
         }
 
         self.rgba_image = Some(rgba_image.clone());
@@ -269,6 +281,18 @@ impl ImageViewer {
         }
         None
     }
+    
+    pub fn calculate_histogram_only(&mut self, img: &image::RgbaImage) {
+        self.hist = vec![0u32; 1024];
+        img.pixels().for_each(|p| {
+            self.hist[p[0] as usize ] += 1;
+            self.hist[p[1] as usize + 256] += 1;
+            self.hist[p[2] as usize + 512] += 1;
+            let gray = (p[0] as f32 * 0.299 + p[1] as f32 * 0.587 + p[2] as f32 * 0.114) as usize;
+            self.hist[gray + 768] += 1;
+        });
+    }
+
 
     pub fn navigation(&mut self, ctx: &egui::Context, irany: i32) {
         if self.list_of_images.is_empty() {

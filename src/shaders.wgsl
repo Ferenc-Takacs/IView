@@ -148,25 +148,24 @@ fn oklab_to_rgb(oklab: vec3<f32>) -> vec3<f32> {
 
 // 2. ELJÁRÁS: Kép feldolgozása
 
-struct FilterSettings {
+struct GpuSharpenSettings {
     sharpen_radius: f32,   // > 0.2
-    sharpen_amount: f32,   // 0.0 = kikapcsolva
+    sharpen_amount: f32,   // != 0.0
     image_width: f32,
     image_height: f32,
+    transparent_color: vec4<f32>,
     transparency_tolerance: f32,
-    use_transparency: u32,
+    use_transparency: u32,   // != 0
     rough_transparency: u32,
     _pad: f32,
-    transparent_color: vec4<f32>,
 }
 
-// Bindingok az alkalmazáshoz
 @group(1) @binding(0) var t_src: texture_2d<f32>;       // Eredeti kép
 @group(1) @binding(1) var s_linear: sampler;            // Lineáris szűrő a LUT-hoz
 @group(1) @binding(2) var t_lut: texture_3d<f32>;       // A már generált 3D LUT
-@group(1) @binding(3) var<uniform> f: FilterSettings;
+@group(1) @binding(3) var<uniform> filt: GpuSharpenSettings;
 @group(1) @binding(4) var t_out: texture_storage_2d<rgba8unorm, write>;
-@group(1) @binding(5) var<uniform> colset_apply: GpuColorSettings;
+@group(1) @binding(5) var<storage, read_write> histogram: array<atomic<u32>, 4*256>;
 
 @compute @workgroup_size(16, 16)
 fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -178,10 +177,10 @@ fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
     let center_color = original_pixel.rgb;
     var processed = center_color;
 	
-    let r = i32(f.sharpen_radius*3.0+0.5) + 1;
+    let r = i32(filt.sharpen_radius*3.0+0.5) + 1;
 
-    if (r > 0 && f.sharpen_radius >= 0.2 && f.sharpen_amount != 0.0) {
-		let sigma = max(f.sharpen_radius / 2.0, 0.5);
+    if (r > 0 && filt.sharpen_radius >= 0.2 && filt.sharpen_amount != 0.0) {
+		let sigma = max(filt.sharpen_radius / 2.0, 0.5);
 		
 		var weight = get_gaussian_weight(0.0, sigma); // center point
 		var sample_coords = coords;
@@ -239,13 +238,23 @@ fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
         }
         let average_color = sum / total_weight;
         let detail = center_color - average_color;
-        processed = center_color + detail * f.sharpen_amount;
+        processed = center_color + detail * filt.sharpen_amount;
     }
     let lut_size = 33.0;
     let lut_coords = clamp(processed, vec3(0.0), vec3(1.0)) * ((lut_size - 1.0) / lut_size) + (0.5 / lut_size);
     var corrected_rgb = textureSampleLevel(t_lut, s_linear, lut_coords, 0.0).rgb;
+    
+    let h_r = u32(corrected_rgb.r * 255.0);
+    atomicAdd(&histogram[h_r], 1u);
+    let h_g = u32(corrected_rgb.g * 255.0);
+    atomicAdd(&histogram[h_g+256], 1u);
+    let h_b = u32(corrected_rgb.b * 255.0);
+    atomicAdd(&histogram[h_b+512], 1u);
+    let gray = u32( dot(corrected_rgb, vec3<f32>(0.299, 0.587, 0.114)) * 255.0 );
+    atomicAdd(&histogram[gray+768], 1u);
+    
     var final_color = vec4<f32>(corrected_rgb, original_pixel.a);
-    if( f.use_transparency > 0u ) {
+    if( filt.use_transparency > 0u ) {
         final_color = color_to_alpha( final_color );
     }
     textureStore(t_out, coords, final_color);
@@ -253,18 +262,18 @@ fn apply_effects(@builtin(global_invocation_id) id: vec3<u32>) {
 
 fn color_to_alpha(pixel: vec4<f32> ) -> vec4<f32> {
     var out = pixel;
-    let tolerance = f.transparency_tolerance * 1.7294;
-    let dist = distance(pixel.rgb, f.transparent_color.rgb);
+    let tolerance = filt.transparency_tolerance * 1.7294;
+    let dist = distance(pixel.rgb, filt.transparent_color.rgb);
 
     if dist < tolerance {
-        if f.transparency_tolerance < 0.001 {
+        if filt.transparency_tolerance < 0.001 {
             out.a = 0;
         }
         else {
             var alpha = dist / tolerance; 
-            if f.rough_transparency > 0u {
+            if filt.rough_transparency > 0u {
                 if alpha < 0.5 {
-                    out = f.transparent_color;
+                    out = filt.transparent_color;
                 }
                 else {
                     out.a = step(0.5, out.a);
