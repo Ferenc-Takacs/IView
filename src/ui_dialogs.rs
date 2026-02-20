@@ -29,7 +29,7 @@ impl ImageViewer {
                             ui.add_space(10.0);
                             ui.heading(egui::RichText::new("IView 2026").size(30.0).strong());
                             ui.label("The high-speed Rust image viewer");
-                            ui.label("Version: 0.6.0");
+                            ui.label("Version: 0.7.0");
                             ui.separator();
 
                             ui.add_space(10.0);
