@@ -291,7 +291,7 @@ impl ImageViewer {
         (self.show_about_window && self.show_about_window_focus)
     }
 
-    pub fn act_off(&mut self) {
+    pub fn act_off(&mut self) {  // close dialogs
         self.color_correction_dialog = false;
         self.show_info = false;
         self.save_dialog = None;
@@ -470,6 +470,11 @@ impl ImageViewer {
 
             separator(ui);
 
+            if ui.button("About IView...").clicked() {
+                self.menvar.change_menu(ctx,Menu::None);
+                self.show_about_window = true;
+            }
+
             let exit_button = egui::Button::new("Exit").shortcut_text(ctx.format_shortcut(
                 &egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
             ));
@@ -477,11 +482,6 @@ impl ImageViewer {
                 self.menvar.change_menu(ctx,Menu::None);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 ctx.send_viewport_cmd_to( egui::ViewportId::ROOT, egui::ViewportCommand::Close );
-            }
-
-            if ui.button("About IView...").clicked() {
-                self.menvar.change_menu(ctx,Menu::None);
-                self.show_about_window = true;
             }
 
         });
@@ -540,11 +540,6 @@ impl ImageViewer {
                 self.menvar.sort_menu_pos = pos( ui, sort_btn.rect.right_top().into(), self.menvar.options_menu_pos);
                 self.menvar.change_menu(ctx,Menu::Sort);
             }
-            let position_btn = ui.button("Window position        >");
-            if position_btn.clicked() {
-                self.menvar.position_menu_pos = pos( ui, position_btn.rect.right_top().into(), self.menvar.options_menu_pos);
-                self.menvar.change_menu(ctx,Menu::Position);
-            }
             let rotate_btn = ui.button("Rotate                           >");
             if rotate_btn.clicked() {
                 self.menvar.rotate_menu_pos = pos( ui, rotate_btn.rect.right_top().into(), self.menvar.options_menu_pos);
@@ -581,22 +576,22 @@ impl ImageViewer {
                 self.show_info = true;
                 self.menvar.change_menu(ctx,Menu::None);
             }
+            
+            let position_btn = ui.button("Window position        >");
+            if position_btn.clicked() {
+                self.menvar.position_menu_pos = pos( ui, position_btn.rect.right_top().into(), self.menvar.options_menu_pos);
+                self.menvar.change_menu(ctx,Menu::Position);
+            }
+            
+            if ui.selectable_label(self.set_pos, "Set Window Position").clicked()
+            {
+                self.set_pos = !self.set_pos;
+                self.menvar.change_menu(ctx,Menu::None);
+            }
 
             if ui.selectable_label(self.refit_reopen, "Refit at Reopen").clicked()
             {
                 self.refit_reopen = !self.refit_reopen;
-                self.menvar.change_menu(ctx,Menu::None);
-            }
-
-            if ui.selectable_label(self.use_gpu, "Use Gpu").clicked()
-            {
-                self.use_gpu = !self.use_gpu;
-                if !self.use_gpu {
-                    self.gpu_interface = None;
-                } else {
-                    self.gpu_tried_init = false;
-                    ctx.request_repaint();
-                }
                 self.menvar.change_menu(ctx,Menu::None);
             }
 
@@ -615,6 +610,19 @@ impl ImageViewer {
                 self.anim_loop = !self.anim_loop;
                 self.menvar.change_menu(ctx,Menu::None);
             }
+            
+            if ui.selectable_label(self.use_gpu, "Use Gpu").clicked()
+            {
+                self.use_gpu = !self.use_gpu;
+                if !self.use_gpu {
+                    self.gpu_interface = None;
+                } else {
+                    self.gpu_tried_init = false;
+                    ctx.request_repaint();
+                }
+                self.menvar.change_menu(ctx,Menu::None);
+            }
+
         });
 
         // sort menu

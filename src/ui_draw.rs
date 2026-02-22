@@ -7,7 +7,7 @@ use crate::pf32::*;
 impl ImageViewer {
 
     pub fn show_title(&self, ctx: &egui::Context, txt: Option<String>) {
-        let mut title = format!("iViewer - {}. {}{}   {} X",
+        let mut title = format!("iView 🔍 {}. {}{}   {} X",
             self.actual_index, self.image_name, if self.modified {'*'} else {' '},  self.magnify).into();
         /*if self.anim_data.is_some() {
             title = format!("{} Frame: {} / {}",title, self.current_frame + 1, self.total_frames).into();
@@ -66,21 +66,21 @@ impl ImageViewer {
                 let six = Pf32 { x: 6.0, y: 6.0 };
                 let ui_rect = ui.max_rect();
                 let old_inner_size:Pf32 = Pf32{ x: ui_rect.max.x - ui_rect.min.x, y:  ui_rect.max.y - ui_rect.min.y } - six;
-                
-                /*if bigger != 1.0  || self.want_magnify == -1.0 {
-                    println!("ui.max_rect {:?}",ui_rect);
-                }*/
-                
+
                 let zero:Pf32 = (0.0, 0.0).into();
                 let mut new_offset = Pf32 { x: 0.0, y: 0.0 };
                 let new_image_size = (self.image_size * self.magnify).floor();
                 let inner_size = new_image_size.min(display_size_netto)+window_inner_frame;
                 let pos = (if self.center { (display_size_netto - inner_size + window_inner_frame) * 0.5 } else { zero }).floor();
 
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(inner_size.into()));
-                //if self.want_magnify == -1.0 || {
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos.into()));
+                //if bigger != 1.0  || self.want_magnify == -1.0 {
+                //    println!("{:?} {:?}",old_inner_size, inner_size-window_inner_frame);
                 //}
+
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(inner_size.into()));
+                if self.set_pos && old_inner_size != inner_size-window_inner_frame {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos.into()));
+                }
 
                 if let Some(tex) = self.texture.as_ref() {
                 

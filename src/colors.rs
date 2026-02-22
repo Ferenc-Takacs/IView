@@ -6,9 +6,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 const TWO_PI: f32 = PI * 2.0;
 
 ///////////////////////////////////////////////////////////////////////////
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Default)]
 pub enum Rotate {
-    Rotate0,
+    #[default] Rotate0,
     Rotate90,
     Rotate180,
     Rotate270,
@@ -45,6 +45,7 @@ fn r(th: f32) -> f32 {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
+#[serde(default)]
 pub struct ColorSettings {
     //pub is_default: bool,
     pub gamma: f32,
@@ -65,9 +66,8 @@ pub struct ColorSettings {
     pub use_transparency: bool,
     pub rough_transparency: bool,
 }
-
-impl ColorSettings {
-    pub fn default() -> Self {
+impl Default for ColorSettings {
+    fn default() -> Self {
         Self {
             gamma: 1.0,
             contrast: 0.0,
@@ -88,6 +88,9 @@ impl ColorSettings {
             rough_transparency: false,
         }
     }
+}
+
+impl ColorSettings {
     
     pub fn is_setted(&self) -> bool {
             !((self.gamma - 1.0).abs() < 0.001 &&

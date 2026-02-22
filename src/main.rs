@@ -100,11 +100,11 @@ async fn check_wgpu_support() -> bool {
         let info = a.get_info();
         let name = info.name.to_lowercase();
         if name.contains("mesa") || name.contains("svga3d") || name.contains("llvmpipe") {
-            //println!("Virtualizált GPU detektálva ({}), biztonsági okokból Glow módra váltunk.", info.name);
+            println!("Virtualizált GPU detektálva ({}), biztonsági okokból Glow módra váltunk.", info.name);
             return false; 
         }
-        //let limits = a.limits();
-        //println!("GPU találva: {}, Max Texture: {}", a.get_info().name, limits.max_texture_dimension_2d);
+        let limits = a.limits();
+        println!("GPU találva: {}, Max Texture: {}", a.get_info().name, limits.max_texture_dimension_2d);
         true
     } else {
         false
@@ -132,6 +132,7 @@ struct ImageViewer {
     pub image_size: Pf32, // beolvasott, és átméretezett kép mérete pixelben
     pub original_image_size: Pf32,  // beolvasott kép mérete pixelben
     pub center: bool,           // igaz, ha középe tesszük az ablakot, egyébként a bal felső sarokba
+    pub set_pos: bool,
     pub aktualis_offset: Pf32,    // megjelenítés kezdőpozíció a nagyított képen
     pub sort: SortDir,
     pub color_settings: ColorSettings,
@@ -144,8 +145,6 @@ struct ImageViewer {
     pub config: AppSettings,
     pub resolution: Option<Resolution>,
     pub recent_file_modified: bool,
-    //pub recent_window_size: Pf32,
-    //pub show_recent_window: bool,
     pub show_exif_details: bool,
     pub is_animated: bool,    // Ez a fájl animálható-e?
     pub anim_playing: bool,   // Fut-e most az animáció?
@@ -160,6 +159,8 @@ struct ImageViewer {
     pub gpu_tried_init: bool,
     pub use_gpu: bool,
     pub has_gpu: bool,
+    pub hist: Vec<u32>,
+    pub modifiers: egui::Modifiers,
     pub modified: bool,
     pub save_dialog: Option<SaveSettings>,
     pub color_correction_dialog: bool,
@@ -170,8 +171,9 @@ struct ImageViewer {
     pub color_correction_dialog_focus: bool,
     pub show_info_focus: bool,
     pub show_about_window_focus: bool,
-    pub hist: Vec<u32>,
-    pub modifiers: egui::Modifiers,
+    pub show_rgb_histogram: bool,
+    pub use_log_scale: bool,
+    pub hist_texture: Option<egui::TextureHandle>,
 }
 
 
@@ -181,7 +183,6 @@ impl Default for ImageViewer {
             image_full_path: None,
             file_meta: None,
             exif: None,
-            //raw_exif: None,
             image_name: "".to_string(),
             image_format: SaveFormat::Bmp,
             image_folder: None,
@@ -199,10 +200,10 @@ impl Default for ImageViewer {
             image_size: (800.0, 600.0).into(),
             original_image_size: (800.0, 600.0).into(),
             center: false,
+            set_pos: true,
             aktualis_offset: (0.0, 0.0).into(),
             sort: SortDir::Name,
             color_settings: ColorSettings::default(),
-            //image_processor: None,
             lut: None,
             refit_reopen: false,
             fit_open: true,
@@ -212,8 +213,6 @@ impl Default for ImageViewer {
             config: AppSettings::default(),
             resolution: None,
             recent_file_modified: false,
-            //recent_window_size: (0.0, 0.0).into(),
-            //show_recent_window: false,
             show_exif_details: false,
             is_animated: false,  // Ez a fájl animálható-e?
             anim_playing: false, // Fut-e most az animáció?
@@ -228,6 +227,8 @@ impl Default for ImageViewer {
             gpu_tried_init: false,
             use_gpu: true,
             has_gpu: true,
+            hist: Vec::new(),
+            modifiers:  egui::Modifiers::NONE,
             modified: false,
             save_dialog: None,
             color_correction_dialog: false,
@@ -238,8 +239,9 @@ impl Default for ImageViewer {
             color_correction_dialog_focus: false,
             show_info_focus: false,
             show_about_window_focus: false,
-            hist: Vec::new(),
-            modifiers:  egui::Modifiers::NONE,
+            show_rgb_histogram: true,
+            use_log_scale: false,
+            hist_texture: None,
         }
     }
 }

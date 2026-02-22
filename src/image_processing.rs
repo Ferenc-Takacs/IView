@@ -268,7 +268,7 @@ impl ImageViewer {
             [width as usize, height as usize],
             &pixel_data,
         );
-        
+
         self.texture = Some(ctx.load_texture("kep", color_image, Default::default()));
     }
 

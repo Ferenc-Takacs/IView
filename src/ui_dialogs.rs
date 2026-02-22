@@ -12,29 +12,58 @@ impl ImageViewer {
             ctx.show_viewport_immediate(
                 egui::ViewportId::from_hash_of("about_viewport"),
                 egui::ViewportBuilder::default()
-                    .with_title("About IView")
-                    .with_inner_size([350.0, 550.0])
-                    .with_resizable(false)
-                    .with_minimize_button(false)
-                    .with_maximize_button(false)
+                    .with_inner_size([350.0, 580.0])
+                    .with_decorations(false)
                     .with_always_on_top(),
                 |ctx, _class| {
+                    self.show_about_window_focus = ctx.input(|i| i.viewport().focused == Some(true));
                     // Bezárás Esc-re
                     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                         self.show_about_window = false;
                     }
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        self.show_about_window_focus = ctx.input(|i| i.viewport().focused == Some(true));
                         ui.vertical_centered(|ui| {
+                            
+                            ui.horizontal(|ui| {
+                                let header_color = if self.show_about_window {
+                                    ui.visuals().widgets.active.bg_fill
+                                } else {
+                                    ui.visuals().widgets.noninteractive.bg_fill
+                                };
+                                let text_color = if self.show_about_window {
+                                    ui.visuals().strong_text_color()
+                                } else {
+                                    ui.visuals().text_color().linear_multiply(0.5)
+                                };
+                                ui.spacing_mut().item_spacing.x = 1.0; // Szoros illeszkedés a gombok között
+                                let header_btn = egui::Button::new(egui::RichText::new("iView 🔍 About").color(text_color).strong()).fill(header_color)
+                                    .min_size(egui::vec2(ui.available_width() - 30.0, 28.0));
+                                let title_bar_response = ui.add(header_btn);
+                                if title_bar_response.is_pointer_button_down_on() {
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                                }
+                                let close_btn = egui::Button::new(egui::RichText::new("✖").size(18.0).strong())
+                                    .min_size(egui::vec2(30.0, 28.0));
+                                let close_resp = ui.add(close_btn);
+                                if close_resp.hovered() {
+                                    ui.painter().rect_filled(close_resp.rect, 2.0, egui::Color32::from_rgb(200, 50, 50));
+                                    ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✖", egui::FontId::proportional(18.0), egui::Color32::WHITE);
+                                }
+                                if close_resp.clicked() {
+                                    self.show_about_window = false;
+                                    ui.ctx().send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+                                }
+                            });
+                            
                             ui.add_space(10.0);
-                            ui.heading(egui::RichText::new("IView 2026").size(30.0).strong());
+                            ui.heading(egui::RichText::new("iView 2026").size(30.0).strong());
                             ui.label("The high-speed Rust image viewer");
-                            ui.label("Version: 0.7.0");
+                            ui.label("Version: 0.8.0");
                             ui.separator();
 
                             ui.add_space(10.0);
-                            ui.label(egui::RichText::new("Fejlesztette:").strong());
-                            ui.label("Ferenc Takács"); // Ide írd be a neved
+                            ui.label(egui::RichText::new("Developed by:").strong());
+                            ui.label("Ferenc Takács");
 
                             ui.add_space(10.0);
                             ui.label(egui::RichText::new("AI Contributor:").strong());
@@ -49,7 +78,7 @@ impl ImageViewer {
                             .max_height(250.0)
                             .show(ui, |ui| {
                                 ui.group(|ui| {
-                                    ui.set_width(320.0); // Fix szélesség, hogy a csoport maga is középen legyen
+                                    ui.set_width(320.0);
                                     ui.vertical_centered(|ui| {
                                         ui.label("• egui & eframe (0.30) - Graphical interface");
                                         ui.label("• image (0.25) - Image decoding and animation");
@@ -58,6 +87,7 @@ impl ImageViewer {
                                         ui.label("• kamadak-exif - EXIF database");
                                         ui.label("• rfd - Native file dialogs");
                                         ui.label("• serde - Configuration backup");
+                                        ui.label("• webp-animation (0.9)");
                                     });
                                 });
                             });
@@ -87,7 +117,7 @@ impl ImageViewer {
             let mut need_save = false;
             let mut cancel_save = false;
             // modal(true) blokkolja az alatta lévő felületet
-            egui::Window::new("Save Settings")
+            egui::Window::new("iView ⚙ Save Settings")
                 .collapsible(false)
                 .resizable(false)
                 .pivot(egui::Align2::CENTER_CENTER) // Középre tesszük
@@ -148,7 +178,7 @@ impl ImageViewer {
         }
 
         if self.show_info {
-            egui::Window::new("Image Info")
+            egui::Window::new("iView 🔍 Image Info")
                 .open(&mut self.show_info) // Bezáró gomb (X) kezelése
                 .show(ctx, |ui| {
                     self.show_info_focus = ctx.input(|i| i.viewport().focused == Some(true));
@@ -308,25 +338,56 @@ impl ImageViewer {
             ctx.show_viewport_immediate(
                 egui::ViewportId::from_hash_of("colorcorrection_viewport"),
                 egui::ViewportBuilder::default()
-                .with_title("Color Correction for iView")
-                .with_inner_size([440.0, if self.hist.len() != 1024 { 350.0 } else { 500.0 }])
-                .with_resizable(false)
-                .with_maximize_button(false)
+                .with_inner_size([440.0, if self.hist.len() != 1024 { 400.0 } else { 550.0 }])
+                .with_decorations(false)
                 .with_always_on_top(),
                 |ctx, _| {
+                self.color_correction_dialog_focus = ctx.input(|i| i.viewport().focused == Some(true)) || ctx.input(|i| i.pointer.any_down());
                 if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::C)) {
                     self.color_correction_dialog = false;
                     ctx.send_viewport_cmd_to( egui::ViewportId::ROOT, egui::ViewportCommand::Focus );
                     ctx.send_viewport_cmd( egui::ViewportCommand::Focus );
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::G)) {
+                if ctx.input(|i| i.key_pressed(egui::Key::G)) {
                     self.bg_style = self.bg_style.clone().inc();
                     changed = true;
                 }
                 egui::CentralPanel::default()
                 .frame(egui::Frame::default().fill(ctx.style().visuals.window_fill()).inner_margin(2.0))
                 .show( ctx, |ui| {
-                self.color_correction_dialog_focus = ctx.input(|i| i.viewport().focused == Some(true));
+                
+                ui.horizontal(|ui| {
+                    let header_color = if self.color_correction_dialog_focus {
+                        ui.visuals().widgets.active.bg_fill
+                    } else {
+                        ui.visuals().widgets.noninteractive.bg_fill
+                    };
+                    let text_color = if self.color_correction_dialog_focus {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        ui.visuals().text_color().linear_multiply(0.5)
+                    };
+                    ui.spacing_mut().item_spacing.x = 1.0; // Szoros illeszkedés a gombok között
+                    let header_btn = egui::Button::new(egui::RichText::new("iView 🔍 Color Correction").color(text_color).strong()).fill(header_color)
+                        .min_size(egui::vec2(ui.available_width() - 30.0, 28.0));
+                    let title_bar_response = ui.add(header_btn);
+                    if title_bar_response.is_pointer_button_down_on() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
+                    let close_btn = egui::Button::new(egui::RichText::new("✖").size(18.0).strong())
+                        .min_size(egui::vec2(30.0, 28.0));
+                    let close_resp = ui.add(close_btn);
+                    if close_resp.hovered() {
+                        ui.painter().rect_filled(close_resp.rect, 2.0, egui::Color32::from_rgb(200, 50, 50));
+                        ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✖", egui::FontId::proportional(18.0), egui::Color32::WHITE);
+                    }
+                    if close_resp.clicked() {
+                        self.color_correction_dialog = false;
+                        ui.ctx().send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+                    }
+                });
+
+                ui.separator(); // Ez választja el a fejlécet a tartalomtól
 
                 ui.spacing_mut().slider_width = 300.0;
 
@@ -533,104 +594,101 @@ impl ImageViewer {
                 });
 
                 if self.hist.len() == 1024 {
-                let max_val = self.hist.iter().cloned().max().unwrap_or(1) as f32;
+                let max_val = if self.show_rgb_histogram {
+                    self.hist[0..768].iter().cloned().max().unwrap_or(1) as f32
+                } else {
+                    self.hist[768..1024].iter().cloned().max().unwrap_or(1) as f32
+                };
                 if max_val >= 1.0 {// Üres hisztogram védelem
                 ui.group(|ui| {
-                    ui.label("Histogram");
-                    // 1. Lefoglalunk egy fix területet (pl. 120px magas)
-                    let (rect, _response) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), 120.0), 
-                        egui::Sense::hover()
-                    );
-                    let painter = ui.painter_at(rect);
-                    // Sötét háttér
-                    painter.rect_filled(rect, 2.0, egui::Color32::DARK_GRAY);
-
-                    let width = rect.width();
-                    let height = rect.height();
-                    let bin_w = width / 256.0;
-
-                    // 3. Rétegek kirajzolása (R, G, B és opcionálisan Gray)
-                    // Segédfüggvény a görbe megrajzolásához
-                    let draw_channel = |offset: usize, color: egui::Color32| {
-                        let fill_color = color.linear_multiply(0.4);
-                        let stroke = egui::Stroke::new(1.0, color);
-                        let mut mesh = egui::Mesh::default();
-                        // Előkészítjük a pontokat: 256 felső pont a görbén, 256 alsó pont a tengelyen
-                        for i in 0..256 {
-                            let val = self.hist[offset + i] as f32;
-                            let h = (val / max_val) * height;
-                            let x = rect.min.x + i as f32 * bin_w;
-                            // Felső pont (görbe)
-                            let top_y = rect.max.y - h;
-                            mesh.vertices.push(egui::epaint::Vertex {
-                                pos: egui::pos2(x, top_y),
-                                uv: egui::epaint::WHITE_UV,
-                                color: fill_color,
-                            });
-                            // Alsó pont (tengely)
-                            mesh.vertices.push(egui::epaint::Vertex {
-                                pos: egui::pos2(x, rect.max.y),
-                                uv: egui::epaint::WHITE_UV,
-                                color: fill_color,
-                            });
-                            // Háromszögek indexelése (minden bin-hez 2 háromszög)
-                            if i > 0 {
-                                let curr = (i * 2) as u32;
-                                let prev = ((i - 1) * 2) as u32;
-                                // Első háromszög
-                                mesh.indices.extend_from_slice(&[prev, curr, prev + 1]);
-                                // Második háromszög
-                                mesh.indices.extend_from_slice(&[curr, prev + 1, curr + 1]);
+                    ui.horizontal( |ui| {
+                        ui.label("Histogram           ");
+                        ui.checkbox(&mut self.show_rgb_histogram, "RGB Mode");
+                        ui.checkbox(&mut self.use_log_scale, "Logaritmic Scale");
+                    });
+                    egui::Frame::group(ui.style()).fill(egui::Color32::from_rgb(200, 200, 200)).show(ui, |ui| {
+                        // 1. Lefoglalunk egy fix területet (pl. 120px magas)
+                        let (rect, _response) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 120.0), 
+                            egui::Sense::hover()
+                        );
+                        
+                        let size = [256, 256];
+                        let pixels = vec![egui::Color32::BLACK; size[0] * size[1]];
+                        let mut image = egui::ColorImage::new(size, pixels);
+                        
+                        if self.show_rgb_histogram {
+                            for chan in 0..3 {
+                                let offset = chan*256;
+                                for x in 0..256 {
+                                    let val = self.hist[offset + x] as f32;
+                                    let h = 255 - if self.use_log_scale {
+                                        (((val+1.0).ln() / (max_val+1.0).ln()) + (val / max_val)) * 255.0 *0.5
+                                    } else {
+                                        (val / max_val) * 255.0
+                                    } as usize;
+                                    for y in h .. 256 {
+                                        let index = y * 256 + x;
+                                        let pixel = &mut image.pixels[index];
+                                        let mut pix = *pixel;
+                                        pix[chan] = 255;
+                                        *pixel = pix;
+                                    }
+                                }
                             }
                         }
-                        // 1. Kitöltés rajzolása a Mesh-el
-                        painter.add(egui::Shape::mesh(mesh));
-                        // 2. Kontúrvonal rajzolása (hogy éles legyen a teteje)
-                        let points: Vec<egui::Pos2> = (0..256).map(|i| {
-                            let val = self.hist[offset + i] as f32;
-                            let h = (val / max_val) * height;
-                            egui::pos2(rect.min.x + i as f32 * bin_w, rect.max.y - h)
-                        }).collect();
-                        painter.add(egui::Shape::line(points, stroke));
-                    };
-
-                    // Sorrend: Gray a legalul, aztán B, G, R
-                    // Vagy ha van checkboxod, csak azt rajzold, amit kell
-                    draw_channel(768, egui::Color32::GRAY);    // Gray
-                    draw_channel(512, egui::Color32::BLUE);    // Blue
-                    draw_channel(256, egui::Color32::GREEN);   // Green
-                    draw_channel(0,   egui::Color32::RED);     // Red
-
-                    if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                        if rect.contains(pos) {
-                            let bin = ((pos.x - rect.min.x) / bin_w) as usize;
-                            let bin = bin.clamp(0, 255);                            
-                            #[allow(deprecated)]
-                            egui::show_tooltip(ui.ctx(), ui.layer_id(), egui::Id::new("hist_tooltip"), |ui: &mut egui::Ui| {
-                                ui.set_width(65.0);
-                                ui.label(format!("Level: {}", bin));
-                                ui.colored_label(egui::Color32::RED,   format!("R:{}", self.hist[bin]));
-                                ui.colored_label(egui::Color32::GREEN, format!("G:{}", self.hist[256 + bin]));
-                                ui.colored_label(egui::Color32::BLUE,  format!("B:{}", self.hist[512 + bin]));
-                                ui.colored_label(egui::Color32::DARK_GRAY,  format!("Gray:{}", self.hist[768 + bin]));
-                            });
-                            
-                            // VAGY a teljesen új Tooltip API-val:
-                            /*
-                            egui::Tooltip::lock(ui.ctx(), egui::Id::new("hist_tooltip"), pos).show(ui.ctx(), |ui| {
-                                ui.label(format!("Level: {}", bin));
-                                // ... stb
-                            });
-                            */
-
-                            // Függőleges vonal rajzolása az egérnél
-                            painter.line_segment(
-                                [egui::pos2(pos.x, rect.min.y), egui::pos2(pos.x, rect.max.y)],
-                                egui::Stroke::new(1.0, egui::Color32::WHITE.linear_multiply(0.5))
-                            );
+                        else {
+                            let offset = 3*256;
+                            for x in 0..256 {
+                                let val = self.hist[offset + x] as f32;
+                                let h = 255 - if self.use_log_scale {
+                                    (((val+1.0).ln() / (max_val+1.0).ln()) + (val / max_val)) * 255.0 *0.5
+                                } else {
+                                    (val / max_val) * 255.0
+                                } as usize;
+                                for y in h .. 256 {
+                                    let index = y * 256 + x;
+                                    image.pixels[index] = egui::Color32::from_rgb(128,128,128);
+                                }
+                            }
                         }
-                    }
+                        
+                        let texture = self.hist_texture.get_or_insert_with(|| {
+                            ctx.load_texture("hist", image.clone(), Default::default())
+                        });
+                        texture.set(image, egui::TextureOptions::LINEAR);
+                        ui.painter().image(
+                            texture.id(),
+                            rect,                               // A UI-n lefoglalt (akár nagyobb) terület
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), // Forrás UV (0-1)
+                            egui::Color32::WHITE                // Szín tint (fehér = nincs módosítás)
+                        );
+
+                        let width = rect.width();
+                        let bin_w = width / 256.0;
+                        let painter = ui.painter_at(rect);
+
+                        if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                            if rect.contains(pos) {
+                                let bin = ((pos.x - rect.min.x) / bin_w) as usize;
+                                let bin = bin.clamp(0, 255);                            
+                                #[allow(deprecated)]
+                                egui::show_tooltip(ui.ctx(), ui.layer_id(), egui::Id::new("hist_tooltip"), |ui: &mut egui::Ui| {
+                                    ui.set_width(65.0);
+                                    ui.label(format!("Level: {}", bin));
+                                    ui.colored_label(egui::Color32::RED,   format!("R:{}", self.hist[bin]));
+                                    ui.colored_label(egui::Color32::GREEN, format!("G:{}", self.hist[256 + bin]));
+                                    ui.colored_label(egui::Color32::BLUE,  format!("B:{}", self.hist[512 + bin]));
+                                    ui.colored_label(egui::Color32::LIGHT_GRAY,  format!("Gray:{}", self.hist[768 + bin]));
+                                });
+                                // Függőleges vonal rajzolása az egérnél
+                                painter.line_segment(
+                                    [egui::pos2(pos.x, rect.min.y), egui::pos2(pos.x, rect.max.y)],
+                                    egui::Stroke::new(1.0, egui::Color32::WHITE.linear_multiply(0.3))
+                                );
+                            }
+                        }
+                    });
                 });
                 }
                 }

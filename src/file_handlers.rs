@@ -16,9 +16,9 @@ use crate::image_processing::*;
 use crate::ImageViewer;
 use crate::gpu_colors;                             
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Default)]
 pub enum SortDir {
-    Name,
+    #[default] Name,
     Ext,
     Date,
     Size,
@@ -46,6 +46,7 @@ pub struct SaveSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct AppSettings {
     pub color_settings: ColorSettings,
     pub sort_dir: SortDir,
@@ -53,11 +54,15 @@ pub struct AppSettings {
     pub magnify: f32,
     pub refit_reopen: bool,
     pub center: bool,
+    pub set_pos: bool,
     pub fit_open: bool,
     pub same_correction_open: bool,
     pub bg_style: BackgroundStyle,
     pub use_gpu: bool,
+    pub anim_loop: bool,
     pub anim_autostart: bool,
+    pub show_rgb_histogram: bool,
+    pub use_log_scale: bool,
     pub recent_files: Vec<PathBuf>,
 }
 
@@ -69,12 +74,16 @@ impl Default for AppSettings {
             last_image: None,
             magnify: 1.0,
             refit_reopen: false,
-            center: true,
+            center: false,
+            set_pos: true,
             fit_open: true,
             same_correction_open: false,
             bg_style: BackgroundStyle::DarkBright,
             use_gpu : true,
+            anim_loop: true,     // Ismétlődjön-e (default: true)?
             anim_autostart: true,
+            show_rgb_histogram: true,
+            use_log_scale: false,
             recent_files: Vec::new(),
         }
     }
@@ -204,11 +213,14 @@ impl ImageViewer {
         self.config.magnify = self.magnify;
         self.config.refit_reopen = self.refit_reopen;
         self.config.center = self.center;
-        self.config.use_gpu = self.use_gpu;
-        self.config.anim_autostart = self.anim_autostart;
+        self.config.set_pos = self.set_pos;
         self.config.fit_open = self.fit_open;
         self.config.same_correction_open = self.same_correction_open;
         self.config.bg_style = self.bg_style.clone();
+        self.config.use_gpu = self.use_gpu;
+        self.config.anim_autostart = self.anim_autostart;
+        self.config.show_rgb_histogram = self.show_rgb_histogram;
+        self.config.use_log_scale = self.use_log_scale;
         if let Ok(json) = serde_json::to_string_pretty(&self.config) {
             let _ = std::fs::write(&path, json);
         }
@@ -376,9 +388,9 @@ impl ImageViewer {
                 .to_string();
 
             let title = if self.save_original {
-                "Save image as ..."
+                "iView 🔍 Save image as ..."
             } else {
-                "Save view as ..."
+                "iView 🔍 Save view as ..."
             };
 
             let mut dialog = rfd::FileDialog::new()
@@ -812,7 +824,7 @@ impl ImageViewer {
         self.resolution = None;
         self.anim_playing = false;
         //self.anim_timer.stop();
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("IView")));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("iView")));
         if let Ok(mut img) = image::open(&filepath) {
             if self.image_format == SaveFormat::Tif {
                 if let Ok(file) = std::fs::File::open(&filepath) {
@@ -1088,7 +1100,7 @@ impl ImageViewer {
             if let Some(file_name) = filepath.file_name().and_then(|n| n.to_str()) {
                 self.image_name = file_name.to_string();
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-                    "IView - {}. {}",
+                    "iView 🔍 {}. {}",
                     self.actual_index, file_name
                 )));
             }
