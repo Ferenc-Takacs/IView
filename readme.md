@@ -150,6 +150,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 | Ctrl + X | Change with clipboard |
 | Ctrl + Shift + X | Change View with clipboard |
 | Escape | exit from popup windows or program  |
+| Enter | exit from popup windows or program  |
 | Ctrl + R | Toggle red channel |
 | Ctrl + G | Toggle greeen channel |
 | Ctrl + B | Toggle blue channel |
@@ -176,7 +177,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
 *   **Executables:** in the executables folder
-*   **Latest Version:** 0.8.0 
+*   **Latest Version:** 0.8.1 
 
 ### 🚀 Development / Fejlesztés
 

@@ -127,7 +127,7 @@ impl MenuVariables {
                 Pf32{x:8.0, y:32.0} + main_window_rect.min.into()
             });
 
-            egui::TopBottomPanel::top("menu_placeholder").show(ctx, |ui| {
+            egui::TopBottomPanel::top("menu_placeholder").default_height(20.0).show(ctx, |ui| {
                 ui.set_height(20.0);
             });
             

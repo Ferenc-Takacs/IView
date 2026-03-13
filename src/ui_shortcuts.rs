@@ -438,6 +438,10 @@ impl ImageViewer {
             i.consume_shortcut(&egui::KeyboardShortcut::new(
                 egui::Modifiers::NONE,
                 egui::Key::Escape,
+            )) ||
+            i.consume_shortcut(&egui::KeyboardShortcut::new(
+                egui::Modifiers::NONE,
+                egui::Key::Enter,
             ))
         }) {
             // quit

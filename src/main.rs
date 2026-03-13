@@ -56,6 +56,7 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_icon(icon) // Itt állítjuk be az ikont
+            .with_resizable(false)
             .with_inner_size([800.0, 600.0]),
         renderer: renderer,
         ..Default::default()
@@ -130,6 +131,7 @@ struct ImageViewer {
     pub resized_image: Option<image::DynamicImage>,
     pub rgba_image: Option<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>>,
     pub image_size: Pf32, // beolvasott, és átméretezett kép mérete pixelben
+    pub inner_size: Pf32,
     pub original_image_size: Pf32,  // beolvasott kép mérete pixelben
     pub center: bool,           // igaz, ha középe tesszük az ablakot, egyébként a bal felső sarokba
     pub set_pos: bool,
@@ -198,6 +200,7 @@ impl Default for ImageViewer {
             resized_image: None,
             rgba_image: None,
             image_size: (800.0, 600.0).into(),
+            inner_size: (800.0, 600.0).into(),
             original_image_size: (800.0, 600.0).into(),
             center: false,
             set_pos: true,

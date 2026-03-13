@@ -26,6 +26,7 @@ impl ImageViewer {
                 
                 //self.aktualis_offset = output.state.offset.into();
                 //let old_offset = self.aktualis_offset;
+
                 
                 let display_size: Pf32 = ctx.input(|i| i.viewport().monitor_size.unwrap()).into();
                 let window_outer_frame = Pf32::pf32(16.0,50.0);
@@ -63,24 +64,49 @@ impl ImageViewer {
                     bigger = self.magnify / old_magnify;
                 }
                 
-                let six = Pf32 { x: 6.0, y: 6.0 };
-                let ui_rect = ui.max_rect();
-                let old_inner_size:Pf32 = Pf32{ x: ui_rect.max.x - ui_rect.min.x, y:  ui_rect.max.y - ui_rect.min.y } - six;
-
                 let zero:Pf32 = (0.0, 0.0).into();
                 let mut new_offset = Pf32 { x: 0.0, y: 0.0 };
+                
                 let new_image_size = (self.image_size * self.magnify).floor();
-                let inner_size = new_image_size.min(display_size_netto)+window_inner_frame;
-                let pos = (if self.center { (display_size_netto - inner_size + window_inner_frame) * 0.5 } else { zero }).floor();
+                let inner_size = new_image_size.min(display_size_netto);
+                let pos = (if self.center { (display_size_netto - inner_size) * 0.5 } else { zero }).floor();
 
-                //if bigger != 1.0  || self.want_magnify == -1.0 {
-                //    println!("{:?} {:?}",old_inner_size, inner_size-window_inner_frame);
-                //}
+                /*if bigger != 1.0  || self.want_magnify == -1.0 {
+                    println!("{:?} {:?}",self.inner_size, inner_size);
+                    if let (Some(outer), Some(inner)) = (ctx.input(|i| i.viewport().outer_rect), ctx.input(|i| i.viewport().inner_rect)) {
+                        let thickness_left = inner.min.x - outer.min.x;
+                        let thickness_right = outer.max.x - inner.max.x;
+                        let thickness_top = inner.min.y - outer.min.y; // Ez tartalmazza a címsort (Title bar)!
+                        let thickness_bottom = outer.max.y - inner.max.y;
 
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(inner_size.into()));
-                if self.set_pos && old_inner_size != inner_size-window_inner_frame {
+                        println!("{:?} {:?} {:?} {:?} {:?} {:?}", outer, inner, 
+                            thickness_left, thickness_right, thickness_top, thickness_bottom);
+                    }
+                }*/
+
+
+                if self.inner_size != inner_size {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize((inner_size+window_inner_frame).into()));
+                }
+                if self.set_pos && self.inner_size != inner_size {
                     ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos.into()));
                 }
+
+                /*if bigger != 1.0  || self.want_magnify == -1.0 {
+                    if let (Some(outer), Some(inner)) = (ctx.input(|i| i.viewport().outer_rect), ctx.input(|i| i.viewport().inner_rect)) {
+                        let thickness_left = inner.min.x - outer.min.x;
+                        let thickness_right = outer.max.x - inner.max.x;
+                        let thickness_top = inner.min.y - outer.min.y; // Ez tartalmazza a címsort (Title bar)!
+                        let thickness_bottom = outer.max.y - inner.max.y;
+
+                        println!("{:?} {:?} {:?} {:?} {:?} {:?}", outer, inner, 
+                            thickness_left, thickness_right, thickness_top, thickness_bottom);
+                        if self.set_pos && self.inner_size != inner_size {
+                             println!("{:?}",pos);
+                        }
+                    }
+                }*/
+
 
                 if let Some(tex) = self.texture.as_ref() {
                 
@@ -98,24 +124,24 @@ impl ImageViewer {
 
                             let mouse_pos_in_window = if self.mouse_zoom {
                                     if let Some(p) = ctx.pointer_latest_pos() {
-                                        Pf32{ x: p.x, y: p.y }.clamp(zero,old_inner_size)
-                                    } else { old_inner_size * 0.5 }
-                                } else { old_inner_size * 0.5 };
+                                        Pf32{ x: p.x, y: p.y }.clamp(zero,self.inner_size)
+                                    } else { self.inner_size * 0.5 }
+                                } else { self.inner_size * 0.5 };
 
                             let mut mouse_pos_in_image = mouse_pos_in_window + self.aktualis_offset; // old
                             mouse_pos_in_image *= bigger; // new
                             let offset = (mouse_pos_in_image - mouse_pos_in_window).max(zero);
                            
 
-                            if new_image_size.x > inner_size.x-window_inner_frame.x {
+                            if new_image_size.x > inner_size.x {
                                 new_offset.x = offset.x; // need horizontal scrollbar
                             }
-                            if new_image_size.y > inner_size.y-window_inner_frame.y {
+                            if new_image_size.y > inner_size.y {
                                 new_offset.y = offset.y; // need vertical scrollbar
                             }
                             /*if bigger != 1.0 || self.want_magnify == -1.0 {
                                 println!("in{:?} > {:?} mou:{:?} off{:?} > {:?} img{:?} > {:?} mag:{}",
-                                    old_inner_size, inner_size, mouse_pos_in_window, self.aktualis_offset, new_offset,
+                                    self.inner_size, inner_size, mouse_pos_in_window, self.aktualis_offset, new_offset,
                                     old_image_size, new_image_size, self.magnify);
                                 println!();
                             }*/
@@ -215,6 +241,7 @@ impl ImageViewer {
                 //self.aktualis_offset = new_offset;
                 self.want_magnify = 0.0;
                 self.change_magnify = 0.0;
+                self.inner_size = inner_size;
             });
     }
 
