@@ -67,6 +67,7 @@
     *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
     *   **Restriction:** The Ctrl + c,v,x functions work when the button is released due to a limitation of the egui system.
     *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
+    *   **Using:** If you want to use this program to view your pictures, you need to set each extension (jpg, png, bmp, tif, gif, webp)  to open with this program.
 
 ---
 
@@ -131,6 +132,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif. Animált képeknél jelenleg az első képet olvassa.
     *   **Korlátozás:** A Ctrl + c,v,x függvények a gomb elengedésekor működnek az egui rendszer korlátai miatt.
     *   **GPS adatok:** Ha a kép tartalmaz geolokációs metaadatokat, az Info panelen megjelenik egy gomb, amellyel a helyszín közvetlenül megnyitható a Google Maps-en.
+    *   **Használat:** Ha ezt a programot akarod használni a képeid nézegetéséhez, minden kiterjesztésnél (jpg, png, bmp, tif, gif, webp) be kell állítani, hogy ezzel a programmal nyíljon meg.
 
 ---
 
