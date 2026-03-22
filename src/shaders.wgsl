@@ -46,7 +46,7 @@ fn apply_color_math(in_color: vec3<f32>) -> vec3<f32> {
 	
     hsv.r = fract(hsv.r + colset.hue_shift / 360.0);
     if (colset.saturation > 0.0) {
-        hsv.g = clamp(hsv.g * (1.0 + colset.saturation*colset.saturation*9.0), 0.0, 1.0);
+        hsv.g = clamp(hsv.g * (1.0 + colset.saturation*colset.saturation*16.0), 0.0, 1.0);
     } else {
         hsv.g *= 1.0 + colset.saturation;
     }

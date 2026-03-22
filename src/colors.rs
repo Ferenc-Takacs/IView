@@ -185,7 +185,7 @@ impl ColorSettings {
 
         // Saturation tolása: 0.0 az alap, -1.0 a szürke, 1.0 a max szaturáció
         if self.saturation > 0.0 {
-            hsv[1] = (hsv[1] * (1.0 + self.saturation*self.saturation*9.0)).clamp(0.0, 1.0);
+            hsv[1] = (hsv[1] * (1.0 + self.saturation*self.saturation*16.0)).clamp(0.0, 1.0);
         } else {
             hsv[1] *= 1.0 + self.saturation;
         }

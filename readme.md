@@ -53,6 +53,7 @@
     *   **Zoom:** You can use the slider or mouse wheel to zoom in from 0.1x to 10x. The window will expand to the maximum size of the screen, and you can move the invisible parts of the image by dragging the image or using the slider within the window.
     *   **Image correction:** Adjust Gamma, Contrast and Brightness in real time. In the Color menu, you can turn on/off the red, green and blue channels, and also set inverse colors. You can use the Blur/Sharpen functions to blur or sharpen boundaries, or make a range of colors transparent.
     *   **Background styles:** For transparent (Png/WebP/Bmp/Tiff) images, you can choose between black, white, gray, or different checkerboard patterns in the View -> Background Style menu.
+    *    **Info:** Many images may contain extra information (exif data) which can be viewed, possible GPS coordinates can be opened on Google Maps. When savingWhen saving, if possible, and please, the scanned exif information will also be included in the file. If save the modified image, the modified resolution, date and modified thumbnail image will also be included in the exif info jpg, bmp, jp2, webp files support exif information.
 	
 ![IView preview](screenshots/preview_transparent.webp)
 
@@ -120,7 +121,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Nagyítás:** A csúszkával, egérgörgővel, vagy nenüből 0.1x és 10x közötti mérettartományt érhetsz el. Az ablak maximum a képernyő nagyságáig növekszik, a nem látható részeket a kép húzásával, vagy a csúszkával mozgathatjuk az ablakon belül.
     *   **Képkorrekció:** Állítsd a Gammát, Kontrasztot és Világosságot valós időben. A Color menüben ki/be kapcsolhatod a piros, zöld és kék csatornákat, inverz színeket is beállíthatsz. Használhatod a Blur/Sharpen funkciókat a határok elmosására, vagy élesítésére, egy színtartományt átlátszóvá tehetsz.
     *   **Háttérstílusok:** Átlátszó (Png/WebP/Bmp/Tiff) képek esetén a View -> Background Style menüben választhatsz fekete, fehér, szürke vagy a különböző sakktábla minták között.
-    *   **Info:** Sok kép tartalmazhat extra információkat (exif data) amelyek megtekinthetők, az esetleges GPS koordináták megnyithatók a Google Map oldalon.
+    *   **Info:** Sok kép tartalmazhat extra információkat (exif data) amelyek megtekinthetők, az esetleges GPS koordináták megnyithatók a Google Map oldalon. Mentésnél, ha ez lehetséges, és kérjük, a a beolvasott exif információ is a fájlba kerül. Ha a módosított képet mentjük, úgy a módosult felbontás, a dátum és a módosult thumbnail kép is az exif infóba kerül. A jpg, bmp, jp2, webp fájlok támogatják az exif információt.
 
 *   **💾 Mentés és Exportálás**
 
