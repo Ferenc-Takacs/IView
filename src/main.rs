@@ -6,7 +6,7 @@ Created by Ferenc Takács in 2026
 */
 
 // disable terminal window beyond graphic window in release version
-//#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 //mod exif;
 mod gpu_colors;
