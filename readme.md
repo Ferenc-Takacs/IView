@@ -22,7 +22,7 @@
 *   **🎨 Image Manipulation:**
     *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
-    *   **Mirror:**Horizontal and vertical mirroring. May be needed for selfies.
+    *   **Mirror:** Horizontal and vertical mirroring. May be needed for selfies.
     *   **Adjustments:** Fine-tune Gamma, Contrast, Hue, Saturation and Brightness, Gaussian Blur/Sharpen, color rotation in Oklab or Hsv color space, color saturation adjustment.
     *   **Transparent color:** Designates a given color and its surroundings as a transparent color.
     *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
@@ -89,7 +89,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **🎨 Képmódosítások:**
     *   **Nagyítás/Kicsinyítés:** Skálázható méret 0.1-től egészen 10-es szorzóig.
     *   **Forgatás:** Gyors elforgatás (0°, 90°, 180°, 270°).
-    *   **Tükrözés:**Vízszintes, és függőleges tükrözés. Szelfiknél szükség lehet rá.
+    *   **Tükrözés:** Vízszintes, és függőleges tükrözés. Szelfiknél szükség lehet rá.
     *   **Képkorrekció:** Gamma, kontraszt és világosság állítási lehetőség, Gaussian élesítés/homályosítás, színforgatás az Oklab vagy Hsv színtérben, színtelítettség állítás.
     *   **Átlátszó szín:** Adott szín, és környezete kijelölése átlátszó színnek.
     *   **Színkezelés:** Színcsatornák (R, G, B) egyenkénti ki/be kapcsolása és inverz megjelenítés.
