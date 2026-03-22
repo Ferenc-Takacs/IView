@@ -191,8 +191,9 @@ impl ImageViewer {
             self.lut = None;
             self.color_settings = default_settings.clone();
         }
-        
+
         let img : & mut image::DynamicImage = &mut Default::default();
+        
         if let Some(resized_image) = self.resized_image.clone() {
             *img = resized_image;
         }
@@ -218,16 +219,24 @@ impl ImageViewer {
                 }
             }
         }
+        let mark : & mut image::DynamicImage = &mut Default::default();
+        if let Some(mark_img) = self.check_mark_img.clone() {
+            *mark = mark_img;
+        }
 
         self.modified = !self.show_original_only &&
                 (self.color_settings.is_setted() || self.color_settings.is_blured());
-        match self.color_settings.rotate {
-            Rotate::Rotate90  => { *img = img.rotate90() ; self.modified = true; }, 
-            Rotate::Rotate180 => { *img = img.rotate180(); self.modified = true; },
-            Rotate::Rotate270 => { *img = img.rotate270(); self.modified = true; },
+        match self.color_settings.orientation {
+            Orientation::Rotate90   => { *img = img.rotate90() ; *mark = mark.rotate90() ; self.modified = true; }, 
+            Orientation::Rotate180  => { *img = img.rotate180(); *mark = mark.rotate180(); self.modified = true; },
+            Orientation::Rotate270  => { *img = img.rotate270(); *mark = mark.rotate270(); self.modified = true; },
+            Orientation::Rotate0F   => { *img = img.fliph(); *mark = mark.fliph(); self.modified = true; },
+            Orientation::Rotate180F => { *img = img.flipv(); *mark = mark.flipv(); self.modified = true; },
+            Orientation::Rotate90F  => { *img = img.fliph().rotate90(); *mark = mark.fliph().rotate90(); self.modified = true; },
+            Orientation::Rotate270F => { *img = img.flipv().rotate90(); *mark = mark.flipv().rotate90(); self.modified = true; },
             _ => {}
         }
-        if new_rotate {
+        if new_rotate && img.width() != img.height() {
             self.want_magnify = -1.0;
         }
 
@@ -270,6 +279,12 @@ impl ImageViewer {
         );
 
         self.texture = Some(ctx.load_texture("kep", color_image, Default::default()));
+        
+        let size = [mark.width() as _, mark.height() as _];
+        self.check_mark_texture = Some(ctx.load_texture(
+            "check-mark",
+            egui::ColorImage::from_rgba_unmultiplied(size, &mark.to_rgba8()),
+            Default::default() ));
     }
 
     pub fn pick_color(&self, pixel_x : u32,pixel_y: u32) -> Option<egui::Color32> {
@@ -281,7 +296,7 @@ impl ImageViewer {
         }
         None
     }
-    
+
     pub fn calculate_histogram_only(&mut self, img: &image::RgbaImage) {
         self.hist = vec![0u32; 1024];
         img.pixels().for_each(|p| {

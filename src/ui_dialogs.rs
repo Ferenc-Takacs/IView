@@ -58,7 +58,7 @@ impl ImageViewer {
                             ui.add_space(10.0);
                             ui.heading(egui::RichText::new("iView 2026").size(30.0).strong());
                             ui.label("The high-speed Rust image viewer");
-                            ui.label("Version: 0.8.1");
+                            ui.label("Version: 0.9.0");
                             ui.separator();
 
                             ui.add_space(10.0);
@@ -92,6 +92,10 @@ impl ImageViewer {
                                 });
                             });
 
+                        if self.gpu_interface.is_some() {
+                            ui.add_space(20.0);
+                            ui.label(egui::RichText::new("GPU interface used.").strong());
+                        }
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {
                             if ui.button("Cancel").clicked() {
@@ -131,6 +135,12 @@ impl ImageViewer {
                                     .text("Quality (JPEG)"),
                             );
                         }
+                        SaveFormat::J2k | SaveFormat::Jp2 => {
+                            ui.add(
+                                egui::Slider::new(&mut save_data.quality, 0..=100)
+                                    .text("Quality(1-100) (0:lossless)"),
+                            );
+                        }
                         SaveFormat::Webp => {
                             ui.checkbox(&mut save_data.lossless, "Lossless Compression");
                             if !save_data.lossless {
@@ -139,6 +149,12 @@ impl ImageViewer {
                                         .text("Quality (WebP)"),
                                 );
                             }
+                        }
+                        SaveFormat::Jxl => {
+                            ui.add(
+                                egui::Slider::new(&mut save_data.quality, 0..=15)
+                                    .text("Quality (0 is lossless)"),
+                            );
                         }
                         _ => {}
                     }
@@ -338,7 +354,7 @@ impl ImageViewer {
             ctx.show_viewport_immediate(
                 egui::ViewportId::from_hash_of("colorcorrection_viewport"),
                 egui::ViewportBuilder::default()
-                .with_inner_size([440.0, if self.hist.len() != 1024 { 400.0 } else { 550.0 }])
+                .with_inner_size([440.0, if self.hist.len() != 1024 { 415.0 } else { 565.0 }])
                 .with_decorations(false)
                 .with_always_on_top(),
                 |ctx, _| {
@@ -391,10 +407,39 @@ impl ImageViewer {
 
                 ui.spacing_mut().slider_width = 300.0;
 
-                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Global Corrections").strong());
-                    ui.add_space(135.0); 
-                    ui.label("Channels:");
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                        ui.label("Orientation:");
+                        ui.style_mut().spacing.item_spacing.x = 4.0;
+
+                        if ui.button(" ⟲ ").on_hover_text("Rotate Left (90°)").clicked() {
+                            self.color_settings.orientation.rotate_left();
+                            changed = true;
+                        }
+                        if ui.button(" ⟳ ").on_hover_text("Rotate Right (90°)").clicked() {
+                            self.color_settings.orientation.rotate_right();
+                            changed = true;
+                        }
+                        if ui.button(" ↔ ").on_hover_text("Flip Horizontal").clicked() {
+                            self.color_settings.orientation.flip_h();
+                            changed = true;
+                        }
+                        if ui.button(" ↕ ").on_hover_text("Flip Vertical").clicked() {
+                            self.color_settings.orientation.flip_v();
+                            changed = true;
+                        }
+
+                        if let Some(check_icon) = &self.check_mark_texture {                            
+                            if ui.add(egui::Button::image(egui::Image::new(check_icon))).on_hover_text("Stand Up 🔝").clicked() {
+                                self.color_settings.orientation = Orientation::Rotate0;
+                                changed = true;
+                            }
+                        }
+
+                        ui.add_space(10.0);
+                        ui.label("Channels:");
+                        ui.style_mut().spacing.item_spacing.x = 2.0;
+
                         ui.style_mut().spacing.item_spacing.x = 2.0; // Szorosabb gombok
                         if ui.selectable_label(self.color_settings.invert, " INV ").clicked() {
                             self.color_settings.invert = !self.color_settings.invert;
@@ -416,6 +461,8 @@ impl ImageViewer {
                             self.color_settings.show_b = !self.color_settings.show_b;
                             changed = true;
                         }
+                        
+                    });
                 });
 
                 let gam = ui.add(egui::Slider::new(
@@ -497,7 +544,7 @@ impl ImageViewer {
                         }
                     }
 
-                });                
+                });
 
                 // --- Élesítés / Blur (GPU előkészítés) ---
                 ui.label(egui::RichText::new("Sharpen (Amount > 0) & Blur (Amount < 0)").strong());

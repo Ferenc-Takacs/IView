@@ -6,37 +6,90 @@ use std::sync::atomic::{AtomicU32, Ordering};
 const TWO_PI: f32 = PI * 2.0;
 
 ///////////////////////////////////////////////////////////////////////////
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Default)]
-pub enum Rotate {
-    #[default] Rotate0,
+
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Default, Debug)]
+pub enum Orientation {
+    #[default]
+    Rotate0,
     Rotate90,
     Rotate180,
     Rotate270,
+    Rotate0F,     // Vízszintes tükrözés
+    Rotate180F,       // Függőleges tükrözés
+    Rotate90F,            // Tükrözés + 90 fok
+    Rotate270F,            // Tükrözés + 90 fok (másik irány)
 }
-impl Rotate {
-    pub fn to_u8(self) -> u8 {
-        match self {
-            Rotate::Rotate0 => 0,
-            Rotate::Rotate90 => 1,
-            Rotate::Rotate180 => 2,
-            Rotate::Rotate270 => 3,
-        }
+
+impl Orientation {
+
+    pub fn rotate_right(&mut self) {
+        *self = match self {
+            Orientation::Rotate0    => Orientation::Rotate90,
+            Orientation::Rotate90   => Orientation::Rotate180,
+            Orientation::Rotate180  => Orientation::Rotate270,
+            Orientation::Rotate270  => Orientation::Rotate0,
+            Orientation::Rotate0F   => Orientation::Rotate90F,
+            Orientation::Rotate180F => Orientation::Rotate270F,
+            Orientation::Rotate90F  => Orientation::Rotate180F,
+            Orientation::Rotate270F => Orientation::Rotate0F,
+        };
     }
 
-    pub fn from_u8(v: u8) -> Self {
-        match v % 4 {
-            0 => Rotate::Rotate0,
-            1 => Rotate::Rotate90,
-            2 => Rotate::Rotate180,
-            3 => Rotate::Rotate270,
-            _ => Rotate::Rotate0,
-        }
+    pub fn rotate_left(&mut self) {
+        *self = match self {
+            Orientation::Rotate0    => Orientation::Rotate270,
+            Orientation::Rotate90   => Orientation::Rotate0,
+            Orientation::Rotate180  => Orientation::Rotate90,
+            Orientation::Rotate270  => Orientation::Rotate180,
+            Orientation::Rotate0F   => Orientation::Rotate270F,
+            Orientation::Rotate180F => Orientation::Rotate90F,
+            Orientation::Rotate90F  => Orientation::Rotate0F,
+            Orientation::Rotate270F => Orientation::Rotate180F,
+        };
     }
 
-    pub fn add(self, other: Rotate) -> Rotate {
-        Rotate::from_u8(self.to_u8() + other.to_u8())
+    pub fn rotate_up(&mut self) {
+        *self = match self {
+            Orientation::Rotate0    => Orientation::Rotate180,
+            Orientation::Rotate90   => Orientation::Rotate270,
+            Orientation::Rotate180  => Orientation::Rotate0,
+            Orientation::Rotate270  => Orientation::Rotate90,
+            Orientation::Rotate0F   => Orientation::Rotate180F,
+            Orientation::Rotate180F => Orientation::Rotate0F,
+            Orientation::Rotate90F  => Orientation::Rotate270F,
+            Orientation::Rotate270F => Orientation::Rotate90F,
+        };
     }
+
+    pub fn flip_v(&mut self) {
+        *self = match self {
+            Orientation::Rotate0    => Orientation::Rotate180F,
+            Orientation::Rotate90   => Orientation::Rotate90F,
+            Orientation::Rotate180  => Orientation::Rotate0F,
+            Orientation::Rotate270  => Orientation::Rotate270F,
+            Orientation::Rotate0F   => Orientation::Rotate180,
+            Orientation::Rotate180F => Orientation::Rotate0,
+            Orientation::Rotate90F  => Orientation::Rotate90,
+            Orientation::Rotate270F => Orientation::Rotate270,
+        };
+    }
+
+    pub fn flip_h(&mut self) {
+        *self = match self {
+            Orientation::Rotate0    => Orientation::Rotate0F,
+            Orientation::Rotate90   => Orientation::Rotate270F,
+            Orientation::Rotate180  => Orientation::Rotate180F,
+            Orientation::Rotate270  => Orientation::Rotate90F,
+            Orientation::Rotate0F   => Orientation::Rotate0,
+            Orientation::Rotate180F => Orientation::Rotate180,
+            Orientation::Rotate90F  => Orientation::Rotate270,
+            Orientation::Rotate270F => Orientation::Rotate90,
+        };
+    }
+
 }
+
+
 
 fn r(th: f32) -> f32 {
     let ra = 2.4285922050f32;
@@ -59,7 +112,7 @@ pub struct ColorSettings {
     pub invert: bool,
     pub sharpen_amount: f32, // -1.0 .. 5.0 // realy image setting
     pub sharpen_radius: f32, // 0.2 .. 3.0 // realy image setting
-    pub rotate: Rotate, // realy image setting
+    pub orientation: Orientation, // realy image setting
     pub oklab: bool,
     pub transparent_color: [u8; 4],
     pub transparency_tolerance: f32, // 0.0 - 1.0
@@ -80,7 +133,7 @@ impl Default for ColorSettings {
             invert: false,
             sharpen_amount: 0.0, // -1.0 .. 5.0
             sharpen_radius: 0.2, // 0.2 .. 3.0
-            rotate: Rotate::Rotate0,
+            orientation: Orientation::Rotate0,
             oklab: true,
             transparent_color: [255, 255, 255, 0],
             transparency_tolerance: 0.0,
@@ -130,11 +183,11 @@ impl ColorSettings {
         let shift = self.hue_shift / 360.0;
         hsv[0] = (hsv[0] + shift).rem_euclid(1.0); // Biztonságos körbefordulás Rustban
 
-        // Saturation tolása: 0.0 az alap, -1.0 a szürke, 1.0 a dupla szaturáció
+        // Saturation tolása: 0.0 az alap, -1.0 a szürke, 1.0 a max szaturáció
         if self.saturation > 0.0 {
-            hsv[1] = hsv[1] + (1.0 - hsv[1]) * self.saturation;
+            hsv[1] = (hsv[1] * (1.0 + self.saturation*self.saturation*9.0)).clamp(0.0, 1.0);
         } else {
-            hsv[1] = hsv[1] * (1.0 + self.saturation);
+            hsv[1] *= 1.0 + self.saturation;
         }
 
         if self.oklab { Self::oklab_to_rgb(hsv) } else { Self::hsv_to_rgb(hsv) }

@@ -14,7 +14,7 @@ use crate::exif_my::*;
 use crate::colors::*;
 use crate::image_processing::*;
 use crate::ImageViewer;
-use crate::gpu_colors;                             
+use crate::gpu_colors;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Default)]
 pub enum SortDir {
@@ -32,6 +32,9 @@ pub enum SaveFormat {
     Png,
     Bmp,
     Tif,
+    J2k,
+    Jp2,
+    Jxl,
 }
 
 pub struct SaveSettings {
@@ -122,10 +125,14 @@ fn apply_modifies_to_frame(img: &mut image::DynamicImage, color_settings: &Color
     } else {
         img.clone()
     };
-    match color_settings.rotate {
-        Rotate::Rotate90 => processed_img = processed_img.rotate90(),
-        Rotate::Rotate180 => processed_img = processed_img.rotate180(),
-        Rotate::Rotate270 => processed_img = processed_img.rotate270(),
+    match color_settings.orientation {
+        Orientation::Rotate90   => processed_img = processed_img.rotate90(),
+        Orientation::Rotate180  => processed_img = processed_img.rotate180(),
+        Orientation::Rotate270  => processed_img = processed_img.rotate270(),
+        Orientation::Rotate0F   => processed_img = processed_img.fliph(),
+        Orientation::Rotate180F => processed_img = processed_img.flipv(),
+        Orientation::Rotate90F  => processed_img = processed_img.fliph().rotate90(),
+        Orientation::Rotate270F => processed_img = processed_img.flipv().rotate90(),
         _ => {}
     }
     let mut rgba_image = processed_img.to_rgba8();
@@ -144,6 +151,12 @@ fn apply_modifies_to_frame(img: &mut image::DynamicImage, color_settings: &Color
         }
     }
     *img = image::DynamicImage::ImageRgba8(rgba_image);
+}
+
+pub fn is_fully_opaque(img: &image::RgbaImage) -> bool {
+    // A .pixels() iterátoron keresztül megnézzük, van-e 255-nél kisebb alfa érték
+    // Az .all() rövidzárral működik: megáll, amint talál egy nem 255-öst
+    img.pixels().all(|p| p[3] == 255)
 }
 
 impl ImageViewer {
@@ -400,6 +413,8 @@ impl ImageViewer {
                 .add_filter("Tiff", &["tif"])
                 .add_filter("Gif", &["gif"])
                 .add_filter("Webp", &["webp"])
+                .add_filter("Jp2", &["jp2","jpc","j2k"])
+                .add_filter("Jxl", &["jxl"])
                 .add_filter("Windows bitmap", &["bmp"])
                 .set_file_name(&default_save_name); // Alapértelmezett név
 
@@ -421,23 +436,29 @@ impl ImageViewer {
                     "png" => SaveFormat::Png,
                     "tif" => SaveFormat::Tif,
                     "gif" => SaveFormat::Gif,
+                    "jp2" => SaveFormat::Jp2,
+                    "jpc" => SaveFormat::J2k,
+                    "j2k" => SaveFormat::J2k,
+                    "jxl" => SaveFormat::Jxl,
                     "bmp" => SaveFormat::Bmp,
                     &_ => SaveFormat::Png,
                 };
-                let inex = self.exif.is_some();
-                let can = ( saveformat == SaveFormat::Jpeg || saveformat == SaveFormat::Webp
-                    || saveformat == SaveFormat::Bmp ) && inex;
+                let qual = if saveformat == SaveFormat::Jxl { 1 } else { 85 }; // Alapértelmezett minőség
+                let in_exif = self.exif.is_some();
+                let can_exif = ( saveformat == SaveFormat::Jpeg || saveformat == SaveFormat::Webp
+                    || saveformat == SaveFormat::Jp2 || saveformat == SaveFormat::Bmp ) && in_exif;
                  let anim = self.anim_data.is_some() && (saveformat == SaveFormat::Gif || saveformat == SaveFormat::Webp);
                                                                                                                         
                 let dial_need = saveformat == SaveFormat::Jpeg || saveformat == SaveFormat::Webp ||
-                    (saveformat == SaveFormat::Bmp && inex) || anim;
+                    saveformat == SaveFormat::J2k || saveformat == SaveFormat::Jp2 || saveformat == SaveFormat::Jxl ||
+                    (saveformat == SaveFormat::Bmp && in_exif) || anim;
                 self.save_dialog = Some(SaveSettings {
                     full_path: ut,
                     saveformat,
-                    quality: 85, // Alapértelmezett JPEG minőség
+                    quality: qual,
                     lossless: false,
-                    can_include_exif: can,
-                    include_exif: inex,
+                    can_include_exif: can_exif,
+                    include_exif: in_exif,
                     save_all_frames: false,
                     is_animation: anim,
                 });
@@ -461,7 +482,62 @@ impl ImageViewer {
                     }                    
                     self.image_modifies(&mut img);
                 }
+                let mut exif_opt: Vec<u8> = Vec::new();
+                if let (true, Some(mut exif)) = (save_data.include_exif, self.exif.clone()) {
+                    let rot = exif.get_num_field("Orientation").unwrap_or(1.0);
+                    if !self.save_original || rot != 1.0 {
+                        if let Some(res) = resolution.clone() {
+                            let thumbnail = exif.generate_fitted_thumbnail(&img.to_rgba8());
+                            exif.patch_thumbnail(&thumbnail);
+                            exif.patch_exifdata( res.xres, res.yres, self.image_size.x as u32, self.image_size.y as u32);
+                        }
+                    }
+                    exif_opt = exif.raw_exif;
+                }
                 match save_data.saveformat {
+                    SaveFormat::J2k | SaveFormat::Jp2 => {
+                        let mut res = Resolution{xres:0.0,yres:0.0,dpi:false};
+                        if let Some(resol) = resolution.clone() {
+                            res = resol;
+                        }
+                        let jp2:u8 = if save_data.saveformat == SaveFormat::Jp2 {1} else {0};
+                        println!("Saving {:?}", save_data.full_path);
+                        let opaque = is_fully_opaque(&img.to_rgba8());
+                        let dynamic_img = if opaque {
+                            image::DynamicImage::ImageRgb8(img.to_rgb8())
+                        } else {
+                            image::DynamicImage::ImageRgba8(img.to_rgba8())
+                        };
+                        
+                        match my_jp2_sys::save_rgba_to_jp2(&dynamic_img, jp2, save_data.quality, res.xres, res.yres, res.dpi, exif_opt) {
+                            Ok((jp2_data,warning)) => {
+                                std::fs::write(&save_data.full_path, jp2_data).unwrap();
+                                if warning.len() > 0 {
+                                    println!("Warning: {}", warning);
+                                }
+                            }
+                            Err(msg) => {
+                                println!("Error: {}", msg);
+                            }
+                        }
+                    }
+                    SaveFormat::Jxl => {
+                        let width = img.width() as u32;
+                        let height = img.height() as u32;
+                        let rgba = img.to_rgb8();
+                        let jxl = if save_data.quality > 0 {
+                            jxl_encoder::LossyConfig::new(save_data.quality as f32)
+                                .encode(&rgba, width, height, jxl_encoder::PixelLayout::Rgb8).expect("JXL kódolási hiba")
+                        }
+                        else {
+                            jxl_encoder::LossyConfig::new(0.1)
+                                .encode(&rgba, width, height, jxl_encoder::PixelLayout::Rgb8).expect("JXL kódolási hiba")
+                            //jxl_encoder::LosslessConfig::new()
+                            //    .encode_request(width, height, jxl_encoder::PixelLayout::Rgb8)
+                            //    .encode(&rgba).expect("JXL kódolási hiba")
+                        };
+                        std::fs::write(&save_data.full_path, jxl).expect("Fájlírási hiba");
+                    }
                     SaveFormat::Jpeg => {
                         let mut buffer = Vec::new();
                         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, save_data.quality);
@@ -492,18 +568,10 @@ impl ImageViewer {
                                     jpeg.segments_mut().insert(0, new_seg);
                                 }
                             }
-                            if let (true, Some(mut exif)) = (save_data.include_exif, self.exif.clone()) {
-                                let rot = exif.get_num_field("Orientation").unwrap_or(1.0);
-                                if !self.save_original || rot != 1.0 {
-                                    if let Some(res) = resolution.clone() {
-                                        let thumbnail = exif.generate_fitted_thumbnail(&img.to_rgba8());
-                                        exif.patch_thumbnail(&thumbnail);
-                                        exif.patch_exifdata( res.xres, res.yres, self.image_size.x as u32, self.image_size.y as u32);
-                                    }
-                                }
+                            if exif_opt.len() > 0 {
                                 let exif_segment = img_parts::jpeg::JpegSegment::new_with_contents(
                                     0xE1, 
-                                    img_parts::Bytes::from(exif.raw_exif.clone())
+                                    img_parts::Bytes::from(exif_opt)
                                 );
                                 jpeg.segments_mut().insert(1, exif_segment);
                             }
@@ -768,13 +836,13 @@ impl ImageViewer {
             .unwrap_or("")
             .to_lowercase();
         let image_format = match ext.as_str() {
-            "jpg" => SaveFormat::Jpeg,
-            "jpeg" => SaveFormat::Jpeg,
+            "jpg" | "jpeg" => SaveFormat::Jpeg,
             "webp" => SaveFormat::Webp,
             "png" => SaveFormat::Png,
-            "tiff" => SaveFormat::Tif,
-            "tif" => SaveFormat::Tif,
+            "tif" | "tiff" => SaveFormat::Tif,
             "gif" => SaveFormat::Gif,
+            "jp2" | "j2k" | "jpc" => SaveFormat::J2k,
+            "jxl" => SaveFormat::Jxl,
             _ => SaveFormat::Bmp,
         };
         self.image_format = image_format;
@@ -789,13 +857,15 @@ impl ImageViewer {
         let mut dialog = rfd::FileDialog::new()
             .add_filter(
                 "Images",
-                &["bmp", "jpg", "jpeg", "png", "tif", "tiff", "gif", "webp"],
+                &["bmp", "jpg", "jpeg", "png", "tif", "tiff", "gif", "webp", "jp2", "j2k", "jpc", "jxl"],
             )
             .add_filter("Png", &["png"])
-            .add_filter("Jpeg kép", &["jpg", "jpeg"])
+            .add_filter("Jpeg", &["jpg", "jpeg"])
             .add_filter("Webp", &["webp"])
             .add_filter("Tiff", &["tif", "tiff"])
             .add_filter("Gif", &["gif"])
+            .add_filter("Jp2", &["jp2", "j2k", "jpc"])
+            .add_filter("Jxl", &["jxl"])
             .add_filter("Windows bitmap", &["bmp"]);
 
         if let Some(path) = def {
@@ -821,61 +891,162 @@ impl ImageViewer {
         let Some(filepath) = self.image_full_path.clone() else {
             return;
         };
-        self.resolution = None;
-        self.anim_playing = false;
         //self.anim_timer.stop();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("iView")));
-        if let Ok(mut img) = image::open(&filepath) {
-            if self.image_format == SaveFormat::Tif {
-                if let Ok(file) = std::fs::File::open(&filepath) {
-                    if let Ok(mut decoder) = tiff::decoder::Decoder::new(file) {
-                        if let Ok(tiff::decoder::ifd::Value::Rational(n, d)) =
-                            decoder.get_tag(tiff::tags::Tag::XResolution)
-                        {
-                            let xres = n as f32 / d as f32;
-                            if let Ok(tiff::decoder::ifd::Value::Rational(n, d)) =
-                                decoder.get_tag(tiff::tags::Tag::YResolution)
-                            {
-                                let yres = n as f32 / d as f32;
-                                if let Ok(unit) = decoder.get_tag(tiff::tags::Tag::ResolutionUnit) {
-                                    let dpi = unit == tiff::decoder::ifd::Value::Unsigned(2);
-                                    self.resolution = Some(Resolution { xres, yres, dpi });
-                                    //println!("{:?} {:?} {:?} ",xres,yres,unit);
+        let mut image: Option<image::DynamicImage> = None;
+        let mut resolution: Option<Resolution> = None;
+
+        
+        match self.image_format {
+            SaveFormat::J2k => {
+                if let Ok(mut file) = std::fs::File::open(&filepath) {
+                    let mut buffer = Vec::new();
+                    if file.read_to_end(&mut buffer).is_ok() {
+                        match my_jp2_sys::load_jp2_from_memory(&buffer) {
+                            Ok((img, xres, yres, dpi, warning)) =>  {
+                                image = Some(image::DynamicImage::ImageRgba8(img));
+                                if warning.len() > 0 {
+                                    println!("Warning: {}", warning);
                                 }
+                                if xres != 0.0 || yres != 0.0 {
+                                    resolution = Some( Resolution{xres: xres, yres: yres, dpi:dpi!=0} );
+                                }
+                            }
+                            Err(e) => {
+                                println!("Error: {}",e);
                             }
                         }
                     }
                 }
-            }
-            else if self.image_format == SaveFormat::Bmp {
-                if let Ok(mut file) = std::fs::File::open(&filepath) {
-                    let mut buffer = [0u8; 8];
-                    if file.seek(std::io::SeekFrom::Start(38)).is_ok()
-                        && file.read_exact(&mut buffer).is_ok()
-                    {
-                        let x_ppm = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-                        let y_ppm = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
-                        if x_ppm > 0 && y_ppm > 0 {
-                            let xres = (x_ppm as f32 / 39.3701).round();
-                            let yres = (y_ppm as f32 / 39.3701).round();
-                            self.resolution = Some(Resolution {
-                                xres,
-                                yres,
-                                dpi: true,
-                            });
+            },
+            SaveFormat::Jxl => {
+                if let Ok(data) = std::fs::read(&filepath) {
+                    //let is_codestream = data.starts_with(&[0xff, 0x0a]);
+                    match jxl_oxide::JxlImage::builder().read(data.as_slice()) {
+                        Ok(jxl_image) => {
+                            if let Ok(render) = jxl_image.render_frame(0) {
+                                let fb = render.image_all_channels(); // PixelBuffer
+                                let width = fb.width() as u32;
+                                let height = fb.height() as u32;
+                                let channels = fb.channels();
+                                let mut rgba_data = Vec::with_capacity((width * height * 4) as usize);
+                                let buf = fb.buf();
+                                for i in 0..(width * height) as usize {
+                                    for c in 0..channels {
+                                        let val: f32 = buf[i * channels + c];
+                                        rgba_data.push((val.clamp(0.0, 1.0) * 255.0) as u8);
+                                    }
+                                    if channels == 3 {
+                                        rgba_data.push(255);
+                                    }
+                                }
+                                if let Some(buffer) = image::RgbaImage::from_raw(width, height, rgba_data) {
+                                    image = Some(image::DynamicImage::ImageRgba8(buffer));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("Open error: {:?}", e);
                         }
                     }
                 }
+            },
+            _ => {
+                if let Ok(img) = image::open(&filepath) {
+                    image = Some(img);
+                }
             }
-            else if self.image_format == SaveFormat::Png {
-                if let Ok(file) = std::fs::File::open(&filepath) {
-                    let reader = std::io::BufReader::new(file);
-                    let decoder = png::Decoder::new(reader);
-                    if let Ok(reader) = decoder.read_info() {
-                        if let Some(phys) = reader.info().pixel_dims {
-                            if phys.unit == png::Unit::Meter {
-                                let x_ppm = phys.xppu;
-                                let y_ppm = phys.yppu;
+        }
+
+        if image.is_some() {
+            
+            self.original_image = image;
+            self.resolution = resolution;
+            self.anim_playing = false;
+            let mut orientation: f32 = 0.0;
+            self.file_meta = None;
+            self.exif = None;
+            
+            match self.image_format { // get resolution
+                SaveFormat::J2k => {
+                    if let Ok(mut file) = std::fs::File::open(&filepath) { // read exif info
+                        let mut buf = Vec::new();
+                        if file.read_to_end(&mut buf).is_ok() {
+                            let mut pos : usize = 0;
+                            while pos < buf.len() - 8 {
+                                let box_len = u32::from_be_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3]]) as usize;
+                                if box_len == 0 { break; }
+                                pos += 4;
+                                let box_id = u32::from_le_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3]]);
+                                pos += 4;
+                                //println!("{:#04x} {:#04x}  ", box_id, (pos-8) as u32);
+                                if box_id == 0x64697575 /* uuid */ {
+                                    if usize::from_le_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3],buf[pos+4],buf[pos+5],buf[pos+6],buf[pos+7]])
+                                    == 0x31440c9dabcd3705 {
+                                        if buf.get(pos+16..pos+20).unwrap()==b"II*\0" || buf.get(pos+16..pos+20).unwrap()==b"MM\0*" {
+                                            let buf = buf[pos+16 .. pos+box_len-8].to_vec();
+                                            let mut data = b"Exif\0\0".to_vec();
+                                            data.extend_from_slice(&buf);
+                                            let mut exifblock = ExifBlock::default();
+                                            let len = data.len();
+                                            if let Ok(result) = exifblock.open( &data, len) {
+                                                let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
+                                                if let Some(xres) = result.get_num_field("XResolution") {
+                                                    res.xres = xres;
+                                                }
+                                                if let Some(mut yres) = result.get_num_field("YResolution") {
+                                                    if yres == 0.0 { yres = res.xres; }
+                                                    res.yres = yres;
+                                                }
+                                                if let Some(unit) = result.get_num_field("ResolutionUnit") {
+                                                    res.dpi = unit as u32 == 2;
+                                                    self.resolution = Some(res);
+                                                }
+                                                if let Some(orient) = result.get_num_field("Orientation") {
+                                                    orientation = orient;
+                                                }
+                                                self.exif = Some(result);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                                pos += box_len - 8;
+                            }
+                            //println!("");
+                        }
+                    }
+                }
+                SaveFormat::Tif => {
+                    if let Ok(file) = std::fs::File::open(&filepath) {
+                        if let Ok(mut decoder) = tiff::decoder::Decoder::new(file) {
+                            if let Ok(tiff::decoder::ifd::Value::Rational(n, d)) =
+                                decoder.get_tag(tiff::tags::Tag::XResolution)
+                            {
+                                let xres = n as f32 / d as f32;
+                                if let Ok(tiff::decoder::ifd::Value::Rational(n, d)) =
+                                    decoder.get_tag(tiff::tags::Tag::YResolution)
+                                {
+                                    let yres = n as f32 / d as f32;
+                                    if let Ok(unit) = decoder.get_tag(tiff::tags::Tag::ResolutionUnit) {
+                                        let dpi = unit == tiff::decoder::ifd::Value::Unsigned(2);
+                                        self.resolution = Some(Resolution { xres, yres, dpi });
+                                        //println!("{:?} {:?} {:?} ",xres,yres,unit);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                SaveFormat::Bmp => {
+                    if let Ok(mut file) = std::fs::File::open(&filepath) {
+                        let mut buffer = [0u8; 8];
+                        if file.seek(std::io::SeekFrom::Start(38)).is_ok()
+                            && file.read_exact(&mut buffer).is_ok()
+                        {
+                            let x_ppm = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+                            let y_ppm = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
+                            if x_ppm > 0 && y_ppm > 0 {
                                 let xres = (x_ppm as f32 / 39.3701).round();
                                 let yres = (y_ppm as f32 / 39.3701).round();
                                 self.resolution = Some(Resolution {
@@ -886,39 +1057,58 @@ impl ImageViewer {
                             }
                         }
                     }
-                }
-            }
-            else if self.image_format == SaveFormat::Jpeg {
-                if let Ok(mut file) = std::fs::File::open(&filepath) {
-                    let mut header = [0u8; 18];
-                    if file.read_exact(&mut header).is_ok() {
-                        // Ellenőrizzük a JFIF mágiát: [FF D8 FF E0 ... 'J' 'F' 'I' 'F']
-                        if header[0..4] == [0xFF, 0xD8, 0xFF, 0xE0] && &header[6..10] == b"JFIF" {
-                            let unit = header[13]; // 1 = DPI (dots per inch), 2 = DPC (dots per cm)
-                            let xres = u16::from_be_bytes([header[14], header[15]]) as f32;
-                            let yres = u16::from_be_bytes([header[16], header[17]]) as f32;
-                            if xres > 0.0 && yres > 0.0 && (unit == 1 || unit == 2) {
-                                self.resolution = Some(Resolution {
-                                    xres,
-                                    yres,
-                                    dpi: unit == 1,
-                                });
+                },
+                SaveFormat::Png => {
+                    if let Ok(file) = std::fs::File::open(&filepath) {
+                        let reader = std::io::BufReader::new(file);
+                        let decoder = png::Decoder::new(reader);
+                        if let Ok(reader) = decoder.read_info() {
+                            if let Some(phys) = reader.info().pixel_dims {
+                                if phys.unit == png::Unit::Meter {
+                                    let x_ppm = phys.xppu;
+                                    let y_ppm = phys.yppu;
+                                    let xres = (x_ppm as f32 / 39.3701).round();
+                                    let yres = (y_ppm as f32 / 39.3701).round();
+                                    self.resolution = Some(Resolution {
+                                        xres,
+                                        yres,
+                                        dpi: true,
+                                    });
+                                }
                             }
                         }
                     }
-                }
+                },
+                SaveFormat::Jpeg => {
+                    if let Ok(mut file) = std::fs::File::open(&filepath) {
+                        let mut header = [0u8; 18];
+                        if file.read_exact(&mut header).is_ok() {
+                            // Ellenőrizzük a JFIF mágiát: [FF D8 FF E0 ... 'J' 'F' 'I' 'F']
+                            if header[0..4] == [0xFF, 0xD8, 0xFF, 0xE0] && &header[6..10] == b"JFIF" {
+                                let unit = header[13]; // 1 = DPI (dots per inch), 2 = DPC (dots per cm)
+                                let xres = u16::from_be_bytes([header[14], header[15]]) as f32;
+                                let yres = u16::from_be_bytes([header[16], header[17]]) as f32;
+                                if xres > 0.0 && yres > 0.0 && (unit == 1 || unit == 2) {
+                                    self.resolution = Some(Resolution {
+                                        xres,
+                                        yres,
+                                        dpi: unit == 1,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                },
+                _ => {}
             }
 
             if let Ok(metadata) = fs::metadata(&filepath) { // for file size & date
                 self.file_meta = Some(metadata);
-            } else {
-                self.file_meta = None;
             }
 
-            self.exif = None;
-            if let Ok(mut f) = std::fs::File::open(&filepath) {
+            if let Ok(mut file) = std::fs::File::open(&filepath) { // read exif info
                 let mut buffer = Vec::new();
-                if f.read_to_end(&mut buffer).is_ok() {
+                if file.read_to_end(&mut buffer).is_ok() {
                     if self.image_format == SaveFormat::Webp {
                         if let Ok(webp) = img_parts::webp::WebP::from_bytes(buffer.clone().into()) {
                             if let Some(exif_bytes) = webp.exif() {
@@ -944,13 +1134,8 @@ impl ImageViewer {
                                         //println!("resu {:?}",res);
                                         self.resolution = Some(res);
                                     }
-                                    if let Some(orientation) = result.get_num_field("Orientation") {
-                                        match orientation {
-                                            6.0 => img = img.rotate90(),
-                                            3.0 => img = img.rotate180(),
-                                            8.0 => img = img.rotate270(),
-                                            _ => {}
-                                        }
+                                    if let Some(orient) = result.get_num_field("Orientation") {
+                                        orientation = orient;
                                     }
                                     self.exif = Some(result);
                                 }
@@ -979,15 +1164,9 @@ impl ImageViewer {
                                         res.dpi = unit as u32 == 2;
                                         self.resolution = Some(res);
                                     }
-                                    if let Some(orientation) = result.get_num_field("Orientation") {
-                                        match orientation {
-                                            6.0 => img = img.rotate90(),
-                                            3.0 => img = img.rotate180(),
-                                            8.0 => img = img.rotate270(),
-                                            _ => {}
-                                        }
+                                    if let Some(orient) = result.get_num_field("Orientation") {
+                                        orientation = orient;
                                     }
-                                    //println!("{:?}",result);
                                     self.exif = Some(result);
                                 }
                             }
@@ -1021,13 +1200,8 @@ impl ImageViewer {
                                             res.dpi = unit as u32 == 2;
                                             self.resolution = Some(res);
                                         }
-                                        if let Some(orientation) = result.get_num_field("Orientation") {
-                                            match orientation {
-                                                6.0 => img = img.rotate90(),
-                                                3.0 => img = img.rotate180(),
-                                                8.0 => img = img.rotate270(),
-                                                _ => {}
-                                            }
+                                        if let Some(orient) = result.get_num_field("Orientation") {
+                                            orientation = orient;
                                         }
                                         self.exif = Some(result);
                                     }
@@ -1056,13 +1230,8 @@ impl ImageViewer {
                                         res.dpi = unit as u32 == 2;
                                         self.resolution = Some(res);
                                     }
-                                    if let Some(orientation) = result.get_num_field("Orientation") {
-                                        match orientation {
-                                            6.0 => img = img.rotate90(),
-                                            3.0 => img = img.rotate180(),
-                                            8.0 => img = img.rotate270(),
-                                            _ => {}
-                                        }
+                                    if let Some(orient) = result.get_num_field("Orientation") {
+                                        orientation = orient;
                                     }
                                     self.exif = Some(result);
                                 }
@@ -1071,8 +1240,12 @@ impl ImageViewer {
                     }
                 }
             }
-
-            self.original_image = Some(img);
+            match orientation {
+                6.0 => self.original_image = Some(self.original_image.clone().unwrap().rotate90()),
+                3.0 => self.original_image = Some(self.original_image.clone().unwrap().rotate180()),
+                8.0 => self.original_image = Some(self.original_image.clone().unwrap().rotate270()),
+                _ => {}
+            }
             self.resized_image = None;
             self.resize = 1.0;
 

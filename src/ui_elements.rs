@@ -72,15 +72,15 @@ impl ImageViewer {
         // Csak az első futáskor inicializálunk, amikor már van frame és GPU
         if self.use_gpu && !self.gpu_tried_init && self.gpu_interface.is_none() {
             if let Some(render_state) = frame.wgpu_render_state() {
-                //println!("Most már van GPU állapota, indulhat a gpu_init...");
+                println!("Most már van GPU állapota, indulhat a gpu_init...");
                 if let Some(interface) = GpuInterface::gpu_init(render_state) {
                     self.gpu_interface = Some(interface);
-                    //println!("GPU INTERFÉSZ KÉSZ!");
+                    println!("GPU INTERFÉSZ KÉSZ!");
                 }
                 self.gpu_tried_init = true;
             }
             else {
-                //println!("frame.wgpu_render_state() is None");
+                println!("frame.wgpu_render_state() is None");
                 self.gpu_tried_init = true;
             }
         }

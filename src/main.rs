@@ -6,7 +6,7 @@ Created by Ferenc Takács in 2026
 */
 
 // disable terminal window beyond graphic window in release version
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+//#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 //mod exif;
 mod gpu_colors;
@@ -62,12 +62,15 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     
-    
     eframe::run_native(
         "IView",
         options,
         Box::new(|cc| {
             let mut app = ImageViewer::default();
+            
+            let image_data = include_bytes!("assets/check-mark.png");
+            app.check_mark_img = Some(image::load_from_memory(image_data).expect("Failed to load icon"));
+
             app.load_settings();
             
             app.has_gpu = has_wgpu;
@@ -176,6 +179,8 @@ struct ImageViewer {
     pub show_rgb_histogram: bool,
     pub use_log_scale: bool,
     pub hist_texture: Option<egui::TextureHandle>,
+    pub check_mark_img: Option<image::DynamicImage>,
+    pub check_mark_texture: Option<egui::TextureHandle>,
 }
 
 
@@ -245,6 +250,8 @@ impl Default for ImageViewer {
             show_rgb_histogram: true,
             use_log_scale: false,
             hist_texture: None,
+            check_mark_img: None, 
+            check_mark_texture: None,
         }
     }
 }
@@ -258,7 +265,7 @@ pub enum Menu {
     RecentFile,
     Sort,
     Position,
-    Rotate,
+    Orientation,
     Channels,
     Backgrounds,
     Zoom,
@@ -286,7 +293,7 @@ pub struct MenuVariables {
     pub recentfile_menu_pos: Pf32,
     pub sort_menu_pos:      Pf32,
     pub position_menu_pos:  Pf32,
-    pub rotate_menu_pos:    Pf32,
+    pub orientation_menu_pos: Pf32,
     pub channels_menu_pos:  Pf32,
     pub background_menu_pos: Pf32,
     pub zoom_menu_pos:      Pf32,
@@ -316,7 +323,7 @@ impl Default for MenuVariables {
             recentfile_menu_pos: (0.0,0.0).into(),
             sort_menu_pos:      (0.0,0.0).into(),
             position_menu_pos:  (0.0,0.0).into(),
-            rotate_menu_pos:    (0.0,0.0).into(),
+            orientation_menu_pos: (0.0,0.0).into(),
             channels_menu_pos:  (0.0,0.0).into(),
             background_menu_pos: (0.0,0.0).into(),
             zoom_menu_pos:      (0.0,0.0).into(),

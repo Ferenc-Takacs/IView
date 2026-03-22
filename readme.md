@@ -17,11 +17,12 @@
     *   Display images directly from the clipboard.
     *   Copy the currently displayed image to the clipboard.
     *   Replace the opened image with the image on the clipboard.
-*   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, and `WEBP`.
+*   **💾 Export & Convert:** Save loaded images in multiple formats, including `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, `WEBP`, `JP2`, `JPC`, `J2K`, `JXL`.
 *   **💾 Recent path:** Quick access to previously used files and their paths for reading and saving.
 *   **🎨 Image Manipulation:**
     *   **Zooming:** Scaling options ranging from 0.1x up to 10x.
     *   **Rotation:** Quick fixed-angle rotation (0°, 90°, 180°, 270°).
+    *   **Mirror:**Horizontal and vertical mirroring. May be needed for selfies.
     *   **Adjustments:** Fine-tune Gamma, Contrast, Hue, Saturation and Brightness, Gaussian Blur/Sharpen, color rotation in Oklab or Hsv color space, color saturation adjustment.
     *   **Transparent color:** Designates a given color and its surroundings as a transparent color.
     *   **Color Tools:** Toggle individual color channels (RGB) or apply color inversion.
@@ -64,10 +65,10 @@
     *   **Paste:** Imports the image from the clipboard into the program.
     *   **Change:** It places the original image on the clipboard while importing the image there into the program.
     *   **Change View:** It places the modified image on the clipboard while importing the image that is there. This allows you to repeat the modifications.
-    *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif. For animated images, it currently reads the first image.
+    *   **Formats:** Supported read/save types: .jpg, .png, .webp, .tif, .bmp, .gif, .jp2, .jpc, .j2k, .jxl. For animated images, it currently reads the first image.
     *   **Restriction:** The Ctrl + c,v,x functions work when the button is released due to a limitation of the egui system.
     *   **GPS datas:** If the image contains geolocation metadata, a button will appear in the Info panel that will open the location directly on Google Maps.
-    *   **Using:** If you want to use this program to view your pictures, you need to set each extension (jpg, png, bmp, tif, gif, webp)  to open with this program.
+    *   **Using:** If you want to use this program to view your pictures, you need to set each extension (jpg, png, bmp, tif, gif, webp, jp2, jpc, j2k, jxl)  to open with this program.
 
 ---
 
@@ -83,11 +84,12 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   Vágólapon lévő képek közvetlen megjelenítése.
     *   A megnyitott kép vágólapra másolása.
     *   A megnyitott kép felcserélése a vágólapon levő képpel.
-*   **💾 Konvertálás:** Képek mentése különböző formátumokba: `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, `WEBP`.
+*   **💾 Konvertálás:** Képek mentése különböző formátumokba: `JPG`, `PNG`, `BMP`, `TIF`, `GIF`, `WEBP`, `JP2`, `JPC`, `J2K`, `JXL`.
 *   **💾 Legutóbbi útvonalak:** Gyors elérése a korábban használt fájlok, és útvonalaik használatára beolvasáshoz, és mentéshez.
 *   **🎨 Képmódosítások:**
     *   **Nagyítás/Kicsinyítés:** Skálázható méret 0.1-től egészen 10-es szorzóig.
     *   **Forgatás:** Gyors elforgatás (0°, 90°, 180°, 270°).
+    *   **Tükrözés:**Vízszintes, és függőleges tükrözés. Szelfiknél szükség lehet rá.
     *   **Képkorrekció:** Gamma, kontraszt és világosság állítási lehetőség, Gaussian élesítés/homályosítás, színforgatás az Oklab vagy Hsv színtérben, színtelítettség állítás.
     *   **Átlátszó szín:** Adott szín, és környezete kijelölése átlátszó színnek.
     *   **Színkezelés:** Színcsatornák (R, G, B) egyenkénti ki/be kapcsolása és inverz megjelenítés.
@@ -101,7 +103,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Módosítások exportálása:** Lehetőség van a képernyőn látható módosítások (nagyítás/kicsinyítés, forgatás, LUT effektek) alkalmazásával menteni a képet ("Save View") vagy a vágólapra másolni azt ("Copy View").
     *   **Prémium átméretezés:** Mentésnél és másolásnál az alkalmazás Lanczos3 mintavételezést használ, ami tűéles minőséget biztosít kicsinyítés esetén is.
 	
-![IView preview](screenshots/preview_a.png)
+![IView preview](screenshots/preview_.webp)
 
 ---
 ### 📖 Használati útmutató
@@ -129,10 +131,10 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
     *   **Paste:** A vágólapon levő képet behozza a programba.
     *   **Change:** Az eredeti képet a vágólapra teszi, miközben az ott levő képet hozza be programba.
     *   **Change View:** A módosított képet a vágólapra teszi, miközben az ott levő képet hozza be. Ez a módosítások ismétlését teszi lehetővé.
-    *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif. Animált képeknél jelenleg az első képet olvassa.
+    *   **Formátumok:** Támogatott olvasási/mentési típusok: .jpg, .png, .webp, .tif, .bmp, .gif, .jp2, .jpc, .j2k, .jxl.
     *   **Korlátozás:** A Ctrl + c,v,x függvények a gomb elengedésekor működnek az egui rendszer korlátai miatt.
     *   **GPS adatok:** Ha a kép tartalmaz geolokációs metaadatokat, az Info panelen megjelenik egy gomb, amellyel a helyszín közvetlenül megnyitható a Google Maps-en.
-    *   **Használat:** Ha ezt a programot akarod használni a képeid nézegetéséhez, minden kiterjesztésnél (jpg, png, bmp, tif, gif, webp) be kell állítani, hogy ezzel a programmal nyíljon meg.
+    *   **Használat:** Ha ezt a programot akarod használni a képeid nézegetéséhez, minden kiterjesztésnél (jpg, png, bmp, tif, gif, webp, jp2, jpc, j2k, jxl) külön-külön be kell állítani, hogy ezzel a programmal nyíljon meg.
 
 ---
 
@@ -164,6 +166,8 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 | Ctrl + Rigth | Rotate 90° |
 | Ctrl + Up | Rotate 180° |
 | Ctrl + Down | Stand to 0° |
+| Ctrl + Alt + Left | Flip horizontal |
+| Ctrl + Alt + Up | Flip vertical |
 | Ctrl | Pick Pixel to Tooltip (until press). Select color with click. |
 | Shift + Alt | Show original image (until press). Warning! You change the keyboard language also. |
 | Space | Animation play/stop |
@@ -179,7 +183,7 @@ Az **IView** egy sokoldalú képnézegető alkalmazás, amely számos hasznos ki
 *   **Cross-platform:** Tested and working on Windows 10 and Linux (Linux Mint).
 
 *   **Executables:** in the executables folder
-*   **Latest Version:** 0.8.1 
+*   **Latest Version:** 0.9.0 
 
 ### 🚀 Development / Fejlesztés
 

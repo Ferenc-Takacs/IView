@@ -97,12 +97,30 @@ impl ImageViewer {
             self.review(ctx, true, false);
         } else if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(
+                egui::Modifiers::COMMAND|egui::Modifiers::ALT,
+                egui::Key::ArrowUp,
+            ))
+        }) {
+            // flip vertical
+            self.color_settings.orientation.flip_v();
+            self.review(ctx, true, false);
+        } else if ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut::new(
+                egui::Modifiers::COMMAND|egui::Modifiers::ALT,
+                egui::Key::ArrowLeft,
+            ))
+        }) {
+            // flip horizontal
+            self.color_settings.orientation.flip_h();
+            self.review(ctx, true, false);
+        } else if ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut::new(
                 egui::Modifiers::COMMAND,
                 egui::Key::ArrowUp,
             ))
         }) {
             // rotate 180
-            self.color_settings.rotate = self.color_settings.rotate.add(Rotate::Rotate180);
+            self.color_settings.orientation.rotate_up();
             self.review(ctx, true, false);
         } else if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(
@@ -111,7 +129,7 @@ impl ImageViewer {
             ))
         }) {
             // rotate -90
-            self.color_settings.rotate = self.color_settings.rotate.add(Rotate::Rotate270);
+            self.color_settings.orientation.rotate_left();
             self.review(ctx,true, true);
         } else if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(
@@ -120,7 +138,7 @@ impl ImageViewer {
             ))
         }) {
             // rotate 90
-            self.color_settings.rotate = self.color_settings.rotate.add(Rotate::Rotate90);
+            self.color_settings.orientation.rotate_right();
             self.review(ctx, true, true);
         } else if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(
@@ -129,9 +147,11 @@ impl ImageViewer {
             ))
         }) {
             // rotate  to 0
-            let rot = self.color_settings.rotate == Rotate::Rotate90
-                || self.color_settings.rotate == Rotate::Rotate270;
-            self.color_settings.rotate = Rotate::Rotate0;
+            let rot = self.color_settings.orientation == Orientation::Rotate90
+                || self.color_settings.orientation == Orientation::Rotate270
+                || self.color_settings.orientation == Orientation::Rotate90F
+                || self.color_settings.orientation == Orientation::Rotate270F;
+            self.color_settings.orientation = Orientation::Rotate0;
             self.review(ctx, true, rot);
         } else if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut::new(

@@ -38,7 +38,7 @@ impl MenuVariables {
             Menu::RecentFile    => self.recentfile_menu_pos + self.menu_pos,
             Menu::Sort          => self.sort_menu_pos       + self.menu_pos,
             Menu::Position      => self.position_menu_pos   + self.menu_pos,
-            Menu::Rotate        => self.rotate_menu_pos     + self.menu_pos,
+            Menu::Orientation   => self.orientation_menu_pos+ self.menu_pos,
             Menu::Channels      => self.channels_menu_pos   + self.menu_pos,
             Menu::Backgrounds   => self.background_menu_pos + self.menu_pos,
             Menu::Zoom          => self.zoom_menu_pos       + self.menu_pos,
@@ -54,7 +54,7 @@ impl MenuVariables {
             Menu::RecentFile    => 3,
             Menu::Sort          => 2,
             Menu::Position      => 2,
-            Menu::Rotate        => 2,
+            Menu::Orientation   => 2,
             Menu::Channels      => 2,
             Menu::Backgrounds   => 2,
             Menu::Zoom          => 2,
@@ -70,7 +70,7 @@ impl MenuVariables {
             Menu::RecentFile    => menu == Menu::None || menu == Menu::File || menu == Menu::Recents,
             Menu::Sort          => menu == Menu::None || menu == Menu::Options,
             Menu::Position      => menu == Menu::None || menu == Menu::Options,
-            Menu::Rotate        => menu == Menu::None || menu == Menu::Options,
+            Menu::Orientation   => menu == Menu::None || menu == Menu::Options,
             Menu::Channels      => menu == Menu::None || menu == Menu::Options,
             Menu::Backgrounds   => menu == Menu::None || menu == Menu::Options,
             Menu::Zoom          => menu == Menu::None || menu == Menu::Options,
@@ -540,10 +540,10 @@ impl ImageViewer {
                 self.menvar.sort_menu_pos = pos( ui, sort_btn.rect.right_top().into(), self.menvar.options_menu_pos);
                 self.menvar.change_menu(ctx,Menu::Sort);
             }
-            let rotate_btn = ui.button("Rotate                           >");
+            let rotate_btn = ui.button("Orientation                    >");
             if rotate_btn.clicked() {
-                self.menvar.rotate_menu_pos = pos( ui, rotate_btn.rect.right_top().into(), self.menvar.options_menu_pos);
-                self.menvar.change_menu(ctx,Menu::Rotate);
+                self.menvar.orientation_menu_pos = pos( ui, rotate_btn.rect.right_top().into(), self.menvar.options_menu_pos);
+                self.menvar.change_menu(ctx,Menu::Orientation);
             }
             let background_btn = ui.add(egui::Button::new("Background           >").shortcut_text(ctx.format_shortcut(
                     &egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::G),
@@ -816,56 +816,80 @@ impl ImageViewer {
         });
 
         // rotate menu
-        show_menu!(self.menvar, ctx, Menu::Rotate, ui, {
+        show_menu!(self.menvar, ctx, Menu::Orientation, ui, {
             let up_button = egui::Button::new("Up").shortcut_text(ctx.format_shortcut(
-                &egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                &egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::ArrowUp),
             ));
             if ui.add(up_button).clicked() {
                 self.menvar.change_menu(ctx,Menu::None);
-                self.color_settings.rotate =
-                    self.color_settings.rotate.add(Rotate::Rotate180);
+                self.color_settings.orientation.rotate_up();
                 self.review(ctx, true, false);
             }
 
             let right_button = egui::Button::new("Right").shortcut_text(
                 ctx.format_shortcut(&egui::KeyboardShortcut::new(
-                    egui::Modifiers::NONE,
+                    egui::Modifiers::COMMAND,
                     egui::Key::ArrowRight,
                 )),
             );
             if ui.add(right_button).clicked() {
                 self.menvar.change_menu(ctx,Menu::None);
-                self.color_settings.rotate =
-                    self.color_settings.rotate.add(Rotate::Rotate90);
+                self.color_settings.orientation.rotate_right();
                 self.review(ctx, true, true);
             }
 
             let left_button = egui::Button::new("Left").shortcut_text(
                 ctx.format_shortcut(&egui::KeyboardShortcut::new(
-                    egui::Modifiers::NONE,
+                    egui::Modifiers::COMMAND,
                     egui::Key::ArrowLeft,
                 )),
             );
             if ui.add(left_button).clicked() {
                 self.menvar.change_menu(ctx,Menu::None);
-                self.color_settings.rotate =
-                    self.color_settings.rotate.add(Rotate::Rotate270);
+                self.color_settings.orientation.rotate_left();
                 self.review(ctx, true, true);
             }
 
             let down_button = egui::Button::new("Stand").shortcut_text(
                 ctx.format_shortcut(&egui::KeyboardShortcut::new(
-                    egui::Modifiers::NONE,
+                    egui::Modifiers::COMMAND,
                     egui::Key::ArrowDown,
                 )),
             );
             if ui.add(down_button).clicked() {
                 self.menvar.change_menu(ctx,Menu::None);
-                let r = self.color_settings.rotate == Rotate::Rotate90
-                    || self.color_settings.rotate == Rotate::Rotate270;
-                self.color_settings.rotate = Rotate::Rotate0;
+                let r = self.color_settings.orientation == Orientation::Rotate90
+                    || self.color_settings.orientation == Orientation::Rotate270
+                    || self.color_settings.orientation == Orientation::Rotate90F
+                    || self.color_settings.orientation == Orientation::Rotate270F;
+                self.color_settings.orientation = Orientation::Rotate0;
                 self.review(ctx, true, r);
             }
+
+            let hflip_button = egui::Button::new("Horizontal ↔").shortcut_text(
+                ctx.format_shortcut(&egui::KeyboardShortcut::new(
+                    egui::Modifiers::COMMAND|egui::Modifiers::ALT,
+                    egui::Key::ArrowLeft,
+                )),
+            );
+            if ui.add(hflip_button).clicked() {
+                self.menvar.change_menu(ctx,Menu::None);
+                self.color_settings.orientation.flip_h();
+                self.review(ctx, true, true);
+            }
+
+            let vflip_button = egui::Button::new("Vertical ↕").shortcut_text(
+                ctx.format_shortcut(&egui::KeyboardShortcut::new(
+                    egui::Modifiers::COMMAND|egui::Modifiers::ALT,
+                    egui::Key::ArrowUp,
+                )),
+            );
+            if ui.add(vflip_button).clicked() {
+                self.menvar.change_menu(ctx,Menu::None);
+                self.color_settings.orientation.flip_v();
+                self.review(ctx, true, true);
+            }
+
         });
 
         // backgrounds menu
