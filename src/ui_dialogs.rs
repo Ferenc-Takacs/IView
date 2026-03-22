@@ -321,7 +321,7 @@ impl ImageViewer {
                         });
                         if self.exif.is_some() {
                             ui.separator();
-                            if ui.button("EXIF adatok részletezése").clicked() {
+                            if ui.button("Detail EXIF data").clicked() {
                                 self.show_exif_details = !self.show_exif_details;
                             }
 
