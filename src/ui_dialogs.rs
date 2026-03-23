@@ -58,7 +58,7 @@ impl ImageViewer {
                             ui.add_space(10.0);
                             ui.heading(egui::RichText::new("iView 2026").size(30.0).strong());
                             ui.label("The high-speed Rust image viewer");
-                            ui.label("Version: 0.9.0");
+                            ui.label("Version: 0.9.1");
                             ui.separator();
 
                             ui.add_space(10.0);
@@ -93,8 +93,10 @@ impl ImageViewer {
                             });
 
                         if self.gpu_interface.is_some() {
-                            ui.add_space(20.0);
-                            ui.label(egui::RichText::new("GPU interface used.").strong());
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(egui::RichText::new("GPU interface used.").strong());
+                            });
                         }
                         ui.add_space(20.0);
                         ui.vertical_centered(|ui| {

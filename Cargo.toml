@@ -36,6 +36,7 @@ jxl-oxide = "0.9"
 jxl-encoder = "0.1.3"
 #my-jp2-sys =  { path = "../my-jp2-sys" }
 my-jp2-sys = { git = "https://github.com/Ferenc-Takacs/my-jp2-sys" }
+brotli = "8.0.2"
 
 [build-dependencies]
 winres = "0.1"

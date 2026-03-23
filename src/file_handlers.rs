@@ -159,6 +159,68 @@ pub fn is_fully_opaque(img: &image::RgbaImage) -> bool {
     img.pixels().all(|p| p[3] == 255)
 }
 
+fn start_cmp(buf: &[u8], pos: usize) -> usize {
+    let s = &buf[pos..];
+    if s.starts_with(b"JXL \x0d\x0a\x87\x0a") { return 0; }
+    if s.starts_with(b"jP  \x0d\x0a\x87\x0a") { return 1; }
+    if s.starts_with(b"brobExif") { return 2; }
+    if s.starts_with(b"Exif\0\0") { return 3; }
+    if s.starts_with(b"uuid") { return 4; }
+    if s.starts_with(b"II*\0") { return 5; }
+    if s.starts_with(b"MM\0*") { return 6; }
+    if s.starts_with(b"jp2c") { return 7; }
+    if s.starts_with(&[0x05,0x37,0xcd,0xab,0x9d,0x0c,0x44,0x31, 0xa7,0x2a,0xfa,0x56,0x1f,0x2a,0x11,0x3e]) { return 8; }
+    100 // Ismeretlen
+}
+
+fn scan_exif(buf: &[u8]) -> Option<Vec<u8>> {
+    if u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) != 0xc {return None; }
+    let header_type = start_cmp(buf, 4);
+    if header_type != 0 && header_type != 1 { return None; }
+
+    let mut pos: usize = 0xc;
+    while pos + 8 < buf.len() {
+        let box_len = u32::from_be_bytes([buf[pos], buf[pos+1], buf[pos+2], buf[pos+3]]) as usize;
+        let box_type_pos = pos + 4;        
+        if box_len == 0 { break; }
+        match start_cmp(buf, box_type_pos) {
+            2 => { // brobExif
+                let data_start = box_type_pos + 8; // 'brobExif' után
+                let data_end = pos + box_len;
+                let mut decompressed = Vec::new();
+                let mut reader = brotli::Decompressor::new(&buf[data_start..data_end], 4096);
+                if reader.read_to_end(&mut decompressed).is_ok() {
+                        let mut data = b"Exif\0\0".to_vec();
+                        data.extend_from_slice(&decompressed[4..]);
+                        return Some(data);
+                }
+            },
+            3 => { // Exif\0\0
+                let exif_start = box_type_pos + 8;
+                let mut data = b"Exif\0\0".to_vec();
+                data.extend_from_slice(&buf[exif_start .. pos + box_len]);
+                return Some(data);
+           },
+            4 => { // uuid
+                if start_cmp(buf, box_type_pos + 4) == 8 { // good_uuid
+                    let exif_start = box_type_pos + 20;
+                    if start_cmp(buf, exif_start) == 5 || start_cmp(buf, exif_start) == 6 {
+                        let mut data = b"Exif\0\0".to_vec();
+                        data.extend_from_slice(&buf[exif_start .. pos + box_len]);
+                        return Some(data);
+                    }
+                }
+            },
+            7 => break, // jp2c - vége
+            _ => {},
+        }
+        pos += box_len;
+    }
+    None
+}
+// alternate good_uuid? [0x05,0x37,0xcd,0xf5,0xa5,0x8c,0x44,0xcd,0xa3,0x2c,0xad,0x72,0x20,0x29,0xad,0x52]
+
+
 impl ImageViewer {
     pub fn add_to_recent(&mut self, path: &PathBuf) {
         self.config.recent_files.retain(|p| p != path);
@@ -841,7 +903,8 @@ impl ImageViewer {
             "png" => SaveFormat::Png,
             "tif" | "tiff" => SaveFormat::Tif,
             "gif" => SaveFormat::Gif,
-            "jp2" | "j2k" | "jpc" => SaveFormat::J2k,
+            "jp2" => SaveFormat::Jp2,
+            "j2k" | "jpc" => SaveFormat::J2k,
             "jxl" => SaveFormat::Jxl,
             _ => SaveFormat::Bmp,
         };
@@ -887,6 +950,35 @@ impl ImageViewer {
         }
     }
 
+    pub fn refresh_exif(&mut self, raw: &[u8], orientation: &mut f32)
+    {
+        let mut exifblock = ExifBlock::default();
+        let len = raw.len();
+        match exifblock.open( &raw, len) {
+            Ok(result) => {
+                let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
+                if let Some(xres) = result.get_num_field("XResolution") {
+                    res.xres = xres;
+                }
+                if let Some(mut yres) = result.get_num_field("YResolution") {
+                    if yres == 0.0 { yres = res.xres; }
+                    res.yres = yres;
+                }
+                if let Some(unit) = result.get_num_field("ResolutionUnit") {
+                    res.dpi = unit as u32 == 2;
+                    self.resolution = Some(res);
+                }
+                if let Some(orient) = result.get_num_field("Orientation") {
+                    *orientation = orient;
+                }
+                self.exif = Some(result);
+            },
+            Err(e) => {
+                println!("Exif Error: {}",e);
+            }
+        }
+    }
+    
     pub fn load_image(&mut self, ctx: &egui::Context, reopen: bool) {
         let Some(filepath) = self.image_full_path.clone() else {
             return;
@@ -898,7 +990,7 @@ impl ImageViewer {
 
         
         match self.image_format {
-            SaveFormat::J2k => {
+            SaveFormat::J2k | SaveFormat::Jp2 => {
                 if let Ok(mut file) = std::fs::File::open(&filepath) {
                     let mut buffer = Vec::new();
                     if file.read_to_end(&mut buffer).is_ok() {
@@ -921,7 +1013,6 @@ impl ImageViewer {
             },
             SaveFormat::Jxl => {
                 if let Ok(data) = std::fs::read(&filepath) {
-                    //let is_codestream = data.starts_with(&[0xff, 0x0a]);
                     match jxl_oxide::JxlImage::builder().read(data.as_slice()) {
                         Ok(jxl_image) => {
                             if let Ok(render) = jxl_image.render_frame(0) {
@@ -957,7 +1048,6 @@ impl ImageViewer {
                 }
             }
         }
-
         if image.is_some() {
             
             self.original_image = image;
@@ -967,53 +1057,14 @@ impl ImageViewer {
             self.file_meta = None;
             self.exif = None;
             
-            match self.image_format { // get resolution
-                SaveFormat::J2k => {
+            match self.image_format { // get resolution && exif
+                SaveFormat::Jxl | SaveFormat::Jp2 | SaveFormat::J2k => {
                     if let Ok(mut file) = std::fs::File::open(&filepath) { // read exif info
                         let mut buf = Vec::new();
                         if file.read_to_end(&mut buf).is_ok() {
-                            let mut pos : usize = 0;
-                            while pos < buf.len() - 8 {
-                                let box_len = u32::from_be_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3]]) as usize;
-                                if box_len == 0 { break; }
-                                pos += 4;
-                                let box_id = u32::from_le_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3]]);
-                                pos += 4;
-                                //println!("{:#04x} {:#04x}  ", box_id, (pos-8) as u32);
-                                if box_id == 0x64697575 /* uuid */ {
-                                    if usize::from_le_bytes([buf[pos],buf[pos+1],buf[pos+2],buf[pos+3],buf[pos+4],buf[pos+5],buf[pos+6],buf[pos+7]])
-                                    == 0x31440c9dabcd3705 {
-                                        if buf.get(pos+16..pos+20).unwrap()==b"II*\0" || buf.get(pos+16..pos+20).unwrap()==b"MM\0*" {
-                                            let buf = buf[pos+16 .. pos+box_len-8].to_vec();
-                                            let mut data = b"Exif\0\0".to_vec();
-                                            data.extend_from_slice(&buf);
-                                            let mut exifblock = ExifBlock::default();
-                                            let len = data.len();
-                                            if let Ok(result) = exifblock.open( &data, len) {
-                                                let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
-                                                if let Some(xres) = result.get_num_field("XResolution") {
-                                                    res.xres = xres;
-                                                }
-                                                if let Some(mut yres) = result.get_num_field("YResolution") {
-                                                    if yres == 0.0 { yres = res.xres; }
-                                                    res.yres = yres;
-                                                }
-                                                if let Some(unit) = result.get_num_field("ResolutionUnit") {
-                                                    res.dpi = unit as u32 == 2;
-                                                    self.resolution = Some(res);
-                                                }
-                                                if let Some(orient) = result.get_num_field("Orientation") {
-                                                    orientation = orient;
-                                                }
-                                                self.exif = Some(result);
-                                            }
-                                            break;
-                                        }
-                                    }
-                                }
-                                pos += box_len - 8;
+                            if let Some(raw) = scan_exif(&buf) {
+                                self.refresh_exif(&raw, &mut orientation);
                             }
-                            //println!("");
                         }
                     }
                 }
@@ -1031,7 +1082,6 @@ impl ImageViewer {
                                     if let Ok(unit) = decoder.get_tag(tiff::tags::Tag::ResolutionUnit) {
                                         let dpi = unit == tiff::decoder::ifd::Value::Unsigned(2);
                                         self.resolution = Some(Resolution { xres, yres, dpi });
-                                        //println!("{:?} {:?} {:?} ",xres,yres,unit);
                                     }
                                 }
                             }
@@ -1118,27 +1168,7 @@ impl ImageViewer {
                                     legacy_format.extend_from_slice(&data);
                                     data = legacy_format;
                                 }
-                                let mut exifblock = ExifBlock::default();
-                                let len = data.len();
-                                if let Ok(result) = exifblock.open( &data, len) {
-                                    let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
-                                    if let Some(xres) = result.get_num_field("XResolution") {
-                                        res.xres = xres;
-                                    }
-                                    if let Some(mut yres) = result.get_num_field("YResolution") {
-                                        if yres == 0.0 { yres = res.xres; }
-                                        res.yres = yres;
-                                    }
-                                    if let Some(unit) = result.get_num_field("ResolutionUnit") {
-                                        res.dpi = unit as u32 == 2;
-                                        //println!("resu {:?}",res);
-                                        self.resolution = Some(res);
-                                    }
-                                    if let Some(orient) = result.get_num_field("Orientation") {
-                                        orientation = orient;
-                                    }
-                                    self.exif = Some(result);
-                                }
+                                self.refresh_exif(&data, &mut orientation);
                             }
                         }
                     }
@@ -1149,26 +1179,7 @@ impl ImageViewer {
                                 .map(|s: &img_parts::jpeg::JpegSegment| s.contents().to_vec());
                                 
                             if let Some(data) = raw_exif {
-                                let mut exifblock = ExifBlock::default();
-                                let len = data.len();
-                                if let Ok(result) = exifblock.open( &data, len) {
-                                    let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
-                                    if let Some(xres) = result.get_num_field("XResolution") {
-                                        res.xres = xres;
-                                    }
-                                    if let Some(mut yres) = result.get_num_field("YResolution") {
-                                        if yres == 0.0 { yres = res.xres; }
-                                        res.yres = yres;
-                                    }
-                                    if let Some(unit) = result.get_num_field("ResolutionUnit") {
-                                        res.dpi = unit as u32 == 2;
-                                        self.resolution = Some(res);
-                                    }
-                                    if let Some(orient) = result.get_num_field("Orientation") {
-                                        orientation = orient;
-                                    }
-                                    self.exif = Some(result);
-                                }
+                                self.refresh_exif(&data, &mut orientation);
                             }
                         }
                     }
@@ -1185,26 +1196,7 @@ impl ImageViewer {
                                         legacy_format.extend_from_slice(&data);
                                         data = legacy_format;
                                     }
-                                    let mut exifblock = ExifBlock::default();
-                                    let len = data.len();
-                                    if let Ok(result) = exifblock.open( &data, len) {
-                                        let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
-                                        if let Some(xres) = result.get_num_field("XResolution") {
-                                            res.xres = xres;
-                                        }
-                                        if let Some(mut yres) = result.get_num_field("YResolution") {
-                                            if yres == 0.0 { yres = res.xres; }
-                                            res.yres = yres;
-                                        }
-                                        if let Some(unit) = result.get_num_field("ResolutionUnit") {
-                                            res.dpi = unit as u32 == 2;
-                                            self.resolution = Some(res);
-                                        }
-                                        if let Some(orient) = result.get_num_field("Orientation") {
-                                            orientation = orient;
-                                        }
-                                        self.exif = Some(result);
-                                    }
+                                    self.refresh_exif(&data, &mut orientation);
                                 }
                             }
                         }
@@ -1215,26 +1207,7 @@ impl ImageViewer {
                                 let raw_content = exif_chunk.contents();
                                 let mut data = b"Exif\0\0".to_vec();
                                 data.extend_from_slice(&raw_content);
-                                let mut exifblock = ExifBlock::default();
-                                let len = data.len();
-                                if let Ok(result) = exifblock.open( &data, len) {
-                                    let mut res = Resolution { xres:0.0, yres:0.0, dpi: true};
-                                    if let Some(xres) = result.get_num_field("XResolution") {
-                                        res.xres = xres;
-                                    }
-                                    if let Some(mut yres) = result.get_num_field("YResolution") {
-                                        if yres == 0.0 { yres = res.xres; }
-                                        res.yres = yres;
-                                    }
-                                    if let Some(unit) = result.get_num_field("ResolutionUnit") {
-                                        res.dpi = unit as u32 == 2;
-                                        self.resolution = Some(res);
-                                    }
-                                    if let Some(orient) = result.get_num_field("Orientation") {
-                                        orientation = orient;
-                                    }
-                                    self.exif = Some(result);
-                                }
+                                self.refresh_exif(&data, &mut orientation);
                             }
                         }
                     }

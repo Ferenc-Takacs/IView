@@ -692,6 +692,13 @@ impl ExifBlock {
         else { u16::from_le_bytes(bytes) }
     }
     
+    fn read_buff_u32(&self, buff :&[u8], pos: usize) -> u32 {
+        let bytes = buff[pos..pos + 4].try_into().unwrap();
+        if self.motorola_order { u32::from_be_bytes(bytes) }
+        else { u32::from_le_bytes(bytes) }
+    }
+
+    
     fn read_u16(&self, pos: usize) -> u16 {
         let bytes = self.raw_exif[pos..pos + 2].try_into().unwrap();
         if self.motorola_order { u16::from_be_bytes(bytes) }
@@ -802,12 +809,12 @@ impl ExifBlock {
     }
 
     pub fn open(&mut self, exifsection: &[u8],  length: usize) -> Result<ExifBlock, String> {
-        let exifheader: [u8; 6] = [b'E',b'x',b'i',b'f',0,0];
+        let exifheader: [u8; 6] = *b"Exif\0\0";
         if exifsection[0..6] != exifheader {
             return Err("No exif header".into());
         }
-        let motorola: [u8; 2] = [b'M',b'M'];
-        let intel: [u8; 2] = [b'I',b'I'];
+        let motorola: [u8; 2] = *b"MM";
+        let intel: [u8; 2] = *b"II";
         if exifsection[6..8] == motorola {
             self.motorola_order = true;
         } else if exifsection[6..8] == intel {
@@ -820,7 +827,7 @@ impl ExifBlock {
             return Err("Corrupt exif header: Invalid Exif start (1)".into())
         }
 
-        let firstoffset = self.read_buff_u16(&exifsection,10) as usize;
+        let firstoffset = self.read_buff_u32(&exifsection,10) as usize;
         if firstoffset < 8 || firstoffset > 32000 {
             return Err("Corrupt exif header: Suspicious offset of first IFD value".into());
         }
