@@ -1,0 +1,780 @@
+use crate::colors::*;
+use crate::file_handlers::*;
+//use crate::image_processing::*;
+use crate::ImageViewer;
+
+
+impl ImageViewer {
+
+    pub fn dialogs(&mut self, ctx: &egui::Context){
+
+        if self.show_about_window {
+            ctx.show_viewport_immediate(
+                egui::ViewportId::from_hash_of("about_viewport"),
+                egui::ViewportBuilder::default()
+                    .with_inner_size([350.0, 580.0])
+                    .with_decorations(false)
+                    .with_always_on_top(),
+                |ctx, _class| {
+                    self.show_about_window_focus = ctx.input(|i| i.viewport().focused == Some(true));
+                    // Bezárás Esc-re
+                    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.show_about_window = false;
+                    }
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.vertical_centered(|ui| {
+                            
+                            ui.horizontal(|ui| {
+                                let header_color = if self.show_about_window {
+                                    ui.visuals().widgets.active.bg_fill
+                                } else {
+                                    ui.visuals().widgets.noninteractive.bg_fill
+                                };
+                                let text_color = if self.show_about_window {
+                                    ui.visuals().strong_text_color()
+                                } else {
+                                    ui.visuals().text_color().linear_multiply(0.5)
+                                };
+                                ui.spacing_mut().item_spacing.x = 1.0; // Szoros illeszkedés a gombok között
+                                let header_btn = egui::Button::new(egui::RichText::new("iView 🔍 About").color(text_color).strong()).fill(header_color)
+                                    .min_size(egui::vec2(ui.available_width() - 30.0, 28.0));
+                                let title_bar_response = ui.add(header_btn);
+                                if title_bar_response.is_pointer_button_down_on() {
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                                }
+                                let close_btn = egui::Button::new(egui::RichText::new("✖").size(18.0).strong())
+                                    .min_size(egui::vec2(30.0, 28.0));
+                                let close_resp = ui.add(close_btn);
+                                if close_resp.hovered() {
+                                    ui.painter().rect_filled(close_resp.rect, 2.0, egui::Color32::from_rgb(200, 50, 50));
+                                    ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✖", egui::FontId::proportional(18.0), egui::Color32::WHITE);
+                                }
+                                if close_resp.clicked() {
+                                    self.show_about_window = false;
+                                    ui.ctx().send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+                                }
+                            });
+                            
+                            ui.add_space(10.0);
+                            ui.heading(egui::RichText::new("iView 2026").size(30.0).strong());
+                            ui.label("The high-speed Rust image viewer");
+                            ui.label("Version: 0.9.1");
+                            ui.separator();
+
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Developed by:").strong());
+                            ui.label("Ferenc Takács");
+
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("AI Contributor:").strong());
+                            ui.label("Google Gemini (Pro)");
+
+                            ui.add_space(20.0);
+                            ui.label(egui::RichText::new("Technologies used:").strong());
+                        });
+
+                        ui.add_space(10.0);
+                        egui::ScrollArea::vertical()
+                            .max_height(250.0)
+                            .show(ui, |ui| {
+                                ui.group(|ui| {
+                                    ui.set_width(320.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label("• egui & eframe (0.30) - Graphical interface");
+                                        ui.label("• image (0.25) - Image decoding and animation");
+                                        ui.label("• tiff (0.9) - Precision metadata management");
+                                        ui.label("• png (0.17) - Chunk level analysis");
+                                        ui.label("• kamadak-exif - EXIF database");
+                                        ui.label("• rfd - Native file dialogs");
+                                        ui.label("• serde - Configuration backup");
+                                        ui.label("• webp-animation (0.9)");
+                                    });
+                                });
+                            });
+
+                        if self.gpu_interface.is_some() {
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(egui::RichText::new("GPU interface used.").strong());
+                            });
+                        }
+                        ui.add_space(20.0);
+                        ui.vertical_centered(|ui| {
+                            if ui.button("Cancel").clicked() {
+                                self.show_about_window = false;
+                            }
+                            ui.add_space(10.0);
+                            ui.label(
+                                egui::RichText::new("Made in Rust, for speed.")
+                                    .italics()
+                                    .size(10.0),
+                            );
+                        });
+                    });
+
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        self.show_about_window = false;
+                    }
+                },
+            );
+        }
+
+        if let Some(save_data) = &mut self.save_dialog {
+            let mut need_save = false;
+            let mut cancel_save = false;
+            // modal(true) blokkolja az alatta lévő felületet
+            egui::Window::new("iView ⚙ Save Settings")
+                .collapsible(false)
+                .resizable(false)
+                .pivot(egui::Align2::CENTER_CENTER) // Középre tesszük
+                .default_pos(ctx.viewport_rect().center())
+                .show(ctx, |ui| {
+                    self.save_dialog_focus = ctx.input(|i| i.viewport().focused == Some(true));
+                    match save_data.saveformat {
+                        SaveFormat::Jpeg => {
+                            ui.add(
+                                egui::Slider::new(&mut save_data.quality, 1..=100)
+                                    .text("Quality (JPEG)"),
+                            );
+                        }
+                        SaveFormat::J2k | SaveFormat::Jp2 => {
+                            ui.add(
+                                egui::Slider::new(&mut save_data.quality, 0..=100)
+                                    .text("Quality(1-100) (0:lossless)"),
+                            );
+                        }
+                        SaveFormat::Webp => {
+                            ui.checkbox(&mut save_data.lossless, "Lossless Compression");
+                            if !save_data.lossless {
+                                ui.add(
+                                    egui::Slider::new(&mut save_data.quality, 1..=100)
+                                        .text("Quality (WebP)"),
+                                );
+                            }
+                        }
+                        SaveFormat::Jxl => {
+                            ui.add(
+                                egui::Slider::new(&mut save_data.quality, 0..=15)
+                                    .text("Quality (0 is lossless)"),
+                            );
+                        }
+                        _ => {}
+                    }
+                    if save_data.can_include_exif {
+                        if let Some(exif) = self.exif.clone() {
+                            if save_data.saveformat != SaveFormat::Bmp && save_data.saveformat != SaveFormat::Png {
+                                ui.separator();
+                            }
+                            let txt = format!("📝 Include EXIF metadata (+ {} bytes) ",exif.raw_exif_length);
+                            ui.checkbox(&mut save_data.include_exif, txt);
+                        }
+                    }
+                    ui.add_space(10.0);
+                    
+                    if save_data.is_animation {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Animation detected:").strong());
+                            ui.radio_value(&mut save_data.save_all_frames, false, "Current Frame Only");
+                            ui.radio_value(&mut save_data.save_all_frames, true, "Full Animation");
+                        });
+                    }
+
+                    ui.horizontal(|ui| {
+                        if ui.button("💾 Save").clicked() {
+                            need_save = true;
+                        }
+                        if ui.button("❌ Cancel").clicked() {
+                            cancel_save = true;
+                        }
+                    });
+                });
+            if cancel_save {
+                self.save_dialog = None;
+            } else if need_save {
+                self.completing_save(); // Ez belül állítja None-ra a save_dialog-ot
+            }
+        }
+
+        if self.show_info {
+            egui::Window::new("iView 🔍 Image Info")
+                .open(&mut self.show_info) // Bezáró gomb (X) kezelése
+                .show(ctx, |ui| {
+                    self.show_info_focus = ctx.input(|i| i.viewport().focused == Some(true));
+                    egui::Grid::new("info_grid")
+                        .num_columns(2)
+                        .spacing([40.0, 4.0]) // Oszlopok közötti távolság
+                        .striped(true) // Sávos festés a jobb olvashatóságért
+                        .show(ui, |ui| {
+                            ui.label("Name of file:");
+                            ui.label(self.image_name.clone());
+                            ui.end_row();
+
+                            ui.label("Size of image:");
+                            ui.label(format!(
+                                "{} x {} pixel",
+                                self.image_size.x * self.resize, self.image_size.y * self.resize
+                            ));
+                            ui.end_row();
+
+                            // Fájlméret és dátum lekérése
+                            if let Some(meta) = &self.file_meta {
+                                ui.label("Size of file:");
+                                let mut s = format!("{}", meta.len()).to_string();
+                                let l = s.len();
+                                if l > 3 {
+                                    s = format!(
+                                        "{} {}",
+                                        s[..l - 3].to_string(),
+                                        s[l - 3..].to_string()
+                                    );
+                                }
+                                if l > 6 {
+                                    s = format!(
+                                        "{} {}",
+                                        s[..l - 6].to_string(),
+                                        s[l - 6..].to_string()
+                                    );
+                                }
+                                if l > 9 {
+                                    s = format!(
+                                        "{} {}",
+                                        s[..l - 9].to_string(),
+                                        s[l - 9..].to_string()
+                                    );
+                                }
+                                ui.label(format!("{} Byte", s));
+                                ui.end_row();
+                                if let Ok(time) = meta.created() {
+                                    ui.label("Time of file:");
+                                    let ts = time_format::from_system_time(time).unwrap();
+                                    let c = time_format::components_utc(ts).unwrap();
+                                    ui.label(format!(
+                                        "{}-{:02}-{:02} {:02}:{:02}:{:02}",
+                                        c.year, c.month, c.month_day, c.hour, c.min, c.sec
+                                    ));
+                                    ui.end_row();
+                                }
+                            }
+
+                            // EXIF save_data kiírása (Dátum, Gépmodell)
+                            if let Some(resol) = &self.resolution {
+                                let x_res = resol.xres;
+                                let y_res = resol.yres;
+                                let dpi = resol.dpi;
+                                let x_val = x_res.to_string();
+                                let y_val = y_res.to_string();
+                                ui.label("Resolution:");
+                                let unit_str = if dpi { "dpi" } else { "dpcm" };
+                                if x_val == y_val {
+                                    ui.label(format!("{} {}", x_val, unit_str));
+                                } else {
+                                    ui.label(format!("{}x{} {}", x_val, y_val, unit_str));
+                                }
+                                ui.end_row();
+                            }
+
+                            if let Some(exif) = &self.exif {
+                                if let Some(f) = exif.get_field("DateTimeOriginal".into())
+                                {
+                                    ui.label("Created:");
+                                    ui.label(f/*.display_value().to_string()*/);
+                                    ui.end_row();
+                                }
+                                if let Some(f) = exif.get_field("Model".into())
+                                {
+                                    ui.label("Machine:");
+                                    ui.label(f/*.display_value().to_string()*/);
+                                    ui.end_row();
+                                }
+
+                                let la = exif .get_num_field("GPSLatitude".into());
+                                    //.and_then(exif_to_decimal);
+                                let lo = exif.get_num_field("GPSLongitude".into());
+                                    //.and_then(exif_to_decimal);
+                                let lar = exif.get_field("GPSLatitudeRef".into());
+                                let lor = exif.get_field("GPSLongitudeRef".into());
+
+                                if let (Some(mut la_), Some(mut lo_), Some(lar_), Some(lor_), ) = (la, lo, lar, lor) {
+                                    // S (Dél) és W (Nyugat) esetén negatív előjel
+                                    if lar_.contains('S') {
+                                        la_ = -la_;
+                                    }
+                                    if lor_.contains('W') {
+                                        lo_ = -lo_;
+                                    }
+                                    ui.label("GeoLocation:");
+                                    let koord_szoveg = format!("{:.6}, {:.6}", la_, lo_);
+                                    ui.label(&koord_szoveg);
+                                    ui.end_row();
+
+                                    ui.label("Map:");
+                                    let map_url = format!(
+                                        "https://www.google.com/maps/place/{:.6},{:.6}",
+                                        la_, lo_
+                                    );
+                                    if ui.link("Open in browser 🌍").clicked() {
+                                        if let Err(e) = webbrowser::open(&map_url) {
+                                            eprintln!("Can not open the Browser: {}", e);
+                                        }
+                                    }
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                        if self.exif.is_some() {
+                            ui.separator();
+                            if ui.button("Detail EXIF data").clicked() {
+                                self.show_exif_details = !self.show_exif_details;
+                            }
+
+                            if self.show_exif_details {
+                                egui::ScrollArea::vertical()
+                                    .max_height(300.0) // Korlátozzuk a magasságot, hogy ne nyúljon túl
+                                    .show(ui, |ui| {
+                                        ui.group(|ui| {
+                                            if let Some(exif) = &self.exif {
+                                                for (name, val, _off) in exif.fields() {
+                                                    ui.horizontal(|ui| {
+                                                        // Tag neve (pl. "Make", "DateTime")
+                                                        ui.label(egui::RichText::new(format!("{}:", name.to_string())).strong());
+                                                        if let Some(v) = val.get("val") {
+                                                            ui.label(v.to_string());
+                                                        }
+                                                        else { ui.label(val.to_string()); }
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    });
+                            }
+                        }
+                });
+        }
+
+        if self.color_correction_dialog && !self.menvar.hided {
+            let mut changed = false;
+            ctx.show_viewport_immediate(
+                egui::ViewportId::from_hash_of("colorcorrection_viewport"),
+                egui::ViewportBuilder::default()
+                .with_inner_size([440.0, if self.hist.len() != 1024 { 415.0 } else { 565.0 }])
+                .with_decorations(false)
+                .with_always_on_top(),
+                |ctx, _| {
+                self.color_correction_dialog_focus = ctx.input(|i| i.viewport().focused == Some(true)) || ctx.input(|i| i.pointer.any_down());
+                if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::C)) {
+                    self.color_correction_dialog = false;
+                    ctx.send_viewport_cmd_to( egui::ViewportId::ROOT, egui::ViewportCommand::Focus );
+                    ctx.send_viewport_cmd( egui::ViewportCommand::Focus );
+                }
+                if ctx.input(|i| i.key_pressed(egui::Key::G)) {
+                    self.bg_style = self.bg_style.clone().inc();
+                    changed = true;
+                }
+                egui::CentralPanel::default()
+                .frame(egui::Frame::default().fill(ctx.style().visuals.window_fill()).inner_margin(2.0))
+                .show( ctx, |ui| {
+                
+                ui.horizontal(|ui| {
+                    let header_color = if self.color_correction_dialog_focus {
+                        ui.visuals().widgets.active.bg_fill
+                    } else {
+                        ui.visuals().widgets.noninteractive.bg_fill
+                    };
+                    let text_color = if self.color_correction_dialog_focus {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        ui.visuals().text_color().linear_multiply(0.5)
+                    };
+                    ui.spacing_mut().item_spacing.x = 1.0; // Szoros illeszkedés a gombok között
+                    let header_btn = egui::Button::new(egui::RichText::new("iView 🔍 Color Correction").color(text_color).strong()).fill(header_color)
+                        .min_size(egui::vec2(ui.available_width() - 30.0, 28.0));
+                    let title_bar_response = ui.add(header_btn);
+                    if title_bar_response.is_pointer_button_down_on() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
+                    let close_btn = egui::Button::new(egui::RichText::new("✖").size(18.0).strong())
+                        .min_size(egui::vec2(30.0, 28.0));
+                    let close_resp = ui.add(close_btn);
+                    if close_resp.hovered() {
+                        ui.painter().rect_filled(close_resp.rect, 2.0, egui::Color32::from_rgb(200, 50, 50));
+                        ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✖", egui::FontId::proportional(18.0), egui::Color32::WHITE);
+                    }
+                    if close_resp.clicked() {
+                        self.color_correction_dialog = false;
+                        ui.ctx().send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+                    }
+                });
+
+                ui.separator(); // Ez választja el a fejlécet a tartalomtól
+
+                ui.spacing_mut().slider_width = 300.0;
+
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                        ui.label("Orientation:");
+                        ui.style_mut().spacing.item_spacing.x = 4.0;
+
+                        if ui.button(" ⟲ ").on_hover_text("Rotate Left (90°)").clicked() {
+                            self.color_settings.orientation.rotate_left();
+                            changed = true;
+                        }
+                        if ui.button(" ⟳ ").on_hover_text("Rotate Right (90°)").clicked() {
+                            self.color_settings.orientation.rotate_right();
+                            changed = true;
+                        }
+                        if ui.button(" ↔ ").on_hover_text("Flip Horizontal").clicked() {
+                            self.color_settings.orientation.flip_h();
+                            changed = true;
+                        }
+                        if ui.button(" ↕ ").on_hover_text("Flip Vertical").clicked() {
+                            self.color_settings.orientation.flip_v();
+                            changed = true;
+                        }
+
+                        if let Some(check_icon) = &self.check_mark_texture {                            
+                            if ui.add(egui::Button::image(egui::Image::new(check_icon))).on_hover_text("Stand Up 🔝").clicked() {
+                                self.color_settings.orientation = Orientation::Rotate0;
+                                changed = true;
+                            }
+                        }
+
+                        ui.add_space(10.0);
+                        ui.label("Channels:");
+                        ui.style_mut().spacing.item_spacing.x = 2.0;
+
+                        ui.style_mut().spacing.item_spacing.x = 2.0; // Szorosabb gombok
+                        if ui.selectable_label(self.color_settings.invert, " INV ").clicked() {
+                            self.color_settings.invert = !self.color_settings.invert;
+                            changed = true;
+                        }
+                        ui.add_space(10.0);
+                        let r_btn = ui.selectable_label(self.color_settings.show_r, " R ");
+                        if r_btn.clicked() {
+                            self.color_settings.show_r = !self.color_settings.show_r;
+                            changed = true;
+                        }
+                        let g_btn = ui.selectable_label(self.color_settings.show_g, " G ");
+                        if g_btn.clicked() {
+                            self.color_settings.show_g = !self.color_settings.show_g;
+                            changed = true;
+                        }
+                        let b_btn = ui.selectable_label(self.color_settings.show_b, " B ");
+                        if b_btn.clicked() {
+                            self.color_settings.show_b = !self.color_settings.show_b;
+                            changed = true;
+                        }
+                        
+                    });
+                });
+
+                let gam = ui.add(egui::Slider::new(
+                    &mut self.color_settings.gamma, 0.1..=3.0)
+                    .text("Gamma"));
+                if self.gpu_interface.is_none() {
+                    if gam.drag_stopped() || (gam.changed() && !ui.input(|i| i.pointer.any_down())) {
+                        changed = true;
+                    }
+                }
+                else {
+                    if gam.changed() {
+                        changed = true;
+                    }
+                }
+                let con = ui.add(egui::Slider::new(
+                    &mut self.color_settings.contrast, -1.0..=1.0)
+                    .text("Contrast"));
+                if self.gpu_interface.is_none() {
+                    if con.drag_stopped() || (con.changed() && !ui.input(|i| i.pointer.any_down())) {
+                        changed = true;
+                    }
+                }
+                else {
+                    if con.changed() {
+                        changed = true;
+                    }
+                }
+
+                // --- HSV (Színvilág) ---
+                //ui.label(egui::RichText::new("Hsv/Oklab Color Shift").strong());
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Color Correction Algorithm: ").strong());
+                        if ui.radio_value(&mut self.color_settings.oklab, true, "Oklab (Natural)").clicked() {
+                            changed = true;
+                        }
+                        if ui.radio_value(&mut self.color_settings.oklab, false, "HSV (Classic)").clicked() {
+                            changed = true;
+                        }
+                    });
+                    let hue = ui.add(egui::Slider::new(
+                        &mut self.color_settings.hue_shift, -180.0..=180.0)
+                        .text("Hue Shift"));
+                    if self.gpu_interface.is_none() {
+                        if hue.drag_stopped() || (hue.changed() && !ui.input(|i| i.pointer.any_down())) {
+                            changed = true;
+                        }
+                    }
+                    else {
+                        if hue.changed() {
+                            changed = true;
+                        }
+                    }
+                    let sat = ui.add(egui::Slider::new(
+                        &mut self.color_settings.saturation, -1.0..=1.0)
+                        .text("Saturation"));
+                    if self.gpu_interface.is_none() {
+                        if sat.drag_stopped() || (sat.changed() && !ui.input(|i| i.pointer.any_down())) {
+                            changed = true;
+                        }
+                    }
+                    else {
+                        if sat.changed() {
+                            changed = true;
+                        }
+                    }
+                    let bri = ui.add(egui::Slider::new(
+                        &mut self.color_settings.brightness, -1.0..=1.0)
+                        .text("Brightness"));
+                    if self.gpu_interface.is_none() {
+                        if bri.drag_stopped() || (bri.changed() && !ui.input(|i| i.pointer.any_down())) {
+                            changed = true;
+                        }
+                    }
+                    else {
+                        if bri.changed() {
+                            changed = true;
+                        }
+                    }
+
+                });
+
+                // --- Élesítés / Blur (GPU előkészítés) ---
+                ui.label(egui::RichText::new("Sharpen (Amount > 0) & Blur (Amount < 0)").strong());
+                ui.horizontal(|ui| {
+                    let res = ui.add(egui::Slider::new(
+                        &mut self.color_settings.sharpen_amount, -1.0..=9.0)
+                        .text("Amount"));
+                    if self.gpu_interface.is_none() {
+                        if res.drag_stopped() || (res.changed() && !ui.input(|i| i.pointer.any_down())) {
+                            changed = true;
+                        }
+                    }
+                    else {
+                        if res.changed() {
+                            changed = true;
+                        }
+                    }
+                    if ui.button("⟲").on_hover_text("Reset Amount").clicked() {
+                        self.color_settings.sharpen_amount = 0.0;
+                        changed = true;
+                    }
+                });
+            
+                ui.horizontal(|ui| {
+                    let res = ui.add(egui::Slider::new(
+                        &mut self.color_settings.sharpen_radius, 0.2..=7.0)
+                        .text("Radius"));
+                    if self.gpu_interface.is_none() {
+                        if res.drag_stopped() || (res.changed() && !ui.input(|i| i.pointer.any_down())) {
+                            changed = true;
+                        }
+                    }
+                    else {
+                        if res.changed() {
+                            changed = true;
+                        }
+                    }
+                    if ui.button("⟲").on_hover_text("Reset Radius").clicked() {
+                        self.color_settings.sharpen_radius = 0.2;
+                        changed = true;
+                    }
+                });
+
+
+                ui.group(|ui| {
+                    if ui.checkbox(&mut self.color_settings.use_transparency, "Use transparency color").changed() {
+                        changed = true;
+                    };
+                    ui.horizontal(|ui| {
+                        let res = ui.add(egui::Slider::new(
+                            &mut self.color_settings.transparency_tolerance, 0.0..=1.0)
+                            .text("Tolerance"));
+                        if self.gpu_interface.is_none() {
+                            if res.drag_stopped() || (res.changed() && !ui.input(|i| i.pointer.any_down())) {
+                                changed = true;
+                            }
+                        }
+                        else {
+                            if res.changed() {
+                                changed = true;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Transparent Color ");
+                        let color = self.color_settings.transparent_color;
+                        
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(26.0, 16.0), egui::Sense::hover());
+                        let col = egui::Color32::from_rgba_unmultiplied(color[0], color[1], color[2], 255);
+                        ui.painter().rect_filled(rect, 2.0, col);
+                        
+                        ui.label("Red:");
+                        let mut r_txt = format!("{}",color[0]);
+                        let r_res = ui.add(egui::TextEdit::singleline(&mut r_txt).desired_width(30.0));
+                        if r_res.changed() {
+                            self.color_settings.transparent_color[0] = r_txt.parse::<u8>().unwrap_or(color[0]);
+                            changed=true;
+                        }
+                        ui.label("Green:");
+                        let mut g_txt = format!("{}",color[1]);
+                        let g_res = ui.add(egui::TextEdit::singleline(&mut g_txt).desired_width(30.0));
+                        if g_res.changed() {
+                            self.color_settings.transparent_color[1] = g_txt.parse::<u8>().unwrap_or(color[1]);
+                            changed=true;
+                        }
+                        ui.label("Blue:");
+                        let mut b_txt = format!("{}",color[2]);
+                        let b_res = ui.add(egui::TextEdit::singleline(&mut b_txt).desired_width(30.0));
+                        if b_res.changed() {
+                            self.color_settings.transparent_color[2] = b_txt.parse::<u8>().unwrap_or(color[2]);
+                            changed=true;
+                        }
+                    });
+                });
+
+                if self.hist.len() == 1024 {
+                let max_val = if self.show_rgb_histogram {
+                    self.hist[0..768].iter().cloned().max().unwrap_or(1) as f32
+                } else {
+                    self.hist[768..1024].iter().cloned().max().unwrap_or(1) as f32
+                };
+                if max_val >= 1.0 {// Üres hisztogram védelem
+                ui.group(|ui| {
+                    ui.horizontal( |ui| {
+                        ui.label("Histogram           ");
+                        ui.checkbox(&mut self.show_rgb_histogram, "RGB Mode");
+                        ui.checkbox(&mut self.use_log_scale, "Logaritmic Scale");
+                    });
+                    egui::Frame::group(ui.style()).fill(egui::Color32::from_rgb(200, 200, 200)).show(ui, |ui| {
+                        // 1. Lefoglalunk egy fix területet (pl. 120px magas)
+                        let (rect, _response) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 120.0), 
+                            egui::Sense::hover()
+                        );
+                        
+                        let size = [256, 256];
+                        let pixels = vec![egui::Color32::BLACK; size[0] * size[1]];
+                        let mut image = egui::ColorImage::new(size, pixels);
+                        
+                        if self.show_rgb_histogram {
+                            for chan in 0..3 {
+                                let offset = chan*256;
+                                for x in 0..256 {
+                                    let val = self.hist[offset + x] as f32;
+                                    let h = 255 - if self.use_log_scale {
+                                        (((val+1.0).ln() / (max_val+1.0).ln()) + (val / max_val)) * 255.0 *0.5
+                                    } else {
+                                        (val / max_val) * 255.0
+                                    } as usize;
+                                    for y in h .. 256 {
+                                        let index = y * 256 + x;
+                                        let pixel = &mut image.pixels[index];
+                                        let mut pix = *pixel;
+                                        pix[chan] = 255;
+                                        *pixel = pix;
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            let offset = 3*256;
+                            for x in 0..256 {
+                                let val = self.hist[offset + x] as f32;
+                                let h = 255 - if self.use_log_scale {
+                                    (((val+1.0).ln() / (max_val+1.0).ln()) + (val / max_val)) * 255.0 *0.5
+                                } else {
+                                    (val / max_val) * 255.0
+                                } as usize;
+                                for y in h .. 256 {
+                                    let index = y * 256 + x;
+                                    image.pixels[index] = egui::Color32::from_rgb(128,128,128);
+                                }
+                            }
+                        }
+                        
+                        let texture = self.hist_texture.get_or_insert_with(|| {
+                            ctx.load_texture("hist", image.clone(), Default::default())
+                        });
+                        texture.set(image, egui::TextureOptions::LINEAR);
+                        ui.painter().image(
+                            texture.id(),
+                            rect,                               // A UI-n lefoglalt (akár nagyobb) terület
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), // Forrás UV (0-1)
+                            egui::Color32::WHITE                // Szín tint (fehér = nincs módosítás)
+                        );
+
+                        let width = rect.width();
+                        let bin_w = width / 256.0;
+                        let painter = ui.painter_at(rect);
+
+                        if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                            if rect.contains(pos) {
+                                let bin = ((pos.x - rect.min.x) / bin_w) as usize;
+                                let bin = bin.clamp(0, 255);                            
+                                #[allow(deprecated)]
+                                egui::show_tooltip(ui.ctx(), ui.layer_id(), egui::Id::new("hist_tooltip"), |ui: &mut egui::Ui| {
+                                    ui.set_width(65.0);
+                                    ui.label(format!("Level: {}", bin));
+                                    ui.colored_label(egui::Color32::RED,   format!("R:{}", self.hist[bin]));
+                                    ui.colored_label(egui::Color32::GREEN, format!("G:{}", self.hist[256 + bin]));
+                                    ui.colored_label(egui::Color32::BLUE,  format!("B:{}", self.hist[512 + bin]));
+                                    ui.colored_label(egui::Color32::LIGHT_GRAY,  format!("Gray:{}", self.hist[768 + bin]));
+                                });
+                                // Függőleges vonal rajzolása az egérnél
+                                painter.line_segment(
+                                    [egui::pos2(pos.x, rect.min.y), egui::pos2(pos.x, rect.max.y)],
+                                    egui::Stroke::new(1.0, egui::Color32::WHITE.linear_multiply(0.3))
+                                );
+                            }
+                        }
+                    });
+                });
+                }
+                }
+
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    if ui.button("Reset All Settings").clicked() {
+                        self.color_settings = ColorSettings::default();
+                        changed = true;
+                    }
+                    ui.add_space(160.0); 
+
+                    let btn = ui.add(egui::Button::new("Show Original (Shift+Alt)"));
+                    
+                    let keys_active = (btn.contains_pointer() && ui.input(|i| i.pointer.any_down())) 
+                            || ctx.input(|i| i.modifiers.shift && i.modifiers.alt);
+                       
+                    if (keys_active && !self.show_original_only) || (!keys_active && self.show_original_only) {
+                        self.show_original_only = keys_active;
+                        changed = true;
+                    }
+                       
+                });
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    self.color_correction_dialog = false;
+                    ctx.send_viewport_cmd_to( egui::ViewportId::ROOT, egui::ViewportCommand::Focus );
+                }
+            });
+            });
+            if changed {
+                self.review(ctx, true, false);
+            }
+        }
+        
+
+        self.after_all_menus(ctx);
+
+    }
+
+}
